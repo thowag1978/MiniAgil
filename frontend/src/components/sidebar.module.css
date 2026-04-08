@@ -1,0 +1,87 @@
+.sidebar {
+  width: 260px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.logoArea {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.logoMark {
+  width: 32px;
+  height: 32px;
+  background: var(--accent-gradient);
+  border-radius: 8px;
+}
+
+.logoArea h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.nav {
+  flex: 1;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navSection {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 16px;
+  margin-bottom: 8px;
+  padding-left: 12px;
+}
+
+.navItem {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.95rem;
+  padding: 10px 12px;
+  border-radius: var(--border-radius-sm);
+  transition: background 0.2s;
+  display: block;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.navItem.active {
+  background: rgba(92, 111, 255, 0.15);
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.bottomArea {
+  padding: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.newBtn {
+  width: 100%;
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: var(--border-radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.newBtn:hover {
+  opacity: 0.9;
+}

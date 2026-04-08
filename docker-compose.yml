@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: miniagil-mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'miniagil'
+      MYSQL_ROOT_PASSWORD: 'rootpassword'
+      MYSQL_USER: 'admin'
+      MYSQL_PASSWORD: 'adminpassword'
+    ports:
+      - '3307:3306'
+    volumes:
+      - db_data:/var/lib/mysql
+
+  redis:
+    image: redis:alpine
+    container_name: miniagil-redis
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio
+    container_name: miniagil-minio
+    restart: always
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      MINIO_ROOT_USER: 'miniadmin'
+      MINIO_ROOT_PASSWORD: 'minipassword'
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  db_data:
+  redis_data:
+  minio_data:

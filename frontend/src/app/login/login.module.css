@@ -1,0 +1,112 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.blob1, .blob2 {
+  position: absolute;
+  filter: blur(90px);
+  z-index: -1;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+.blob1 {
+  width: 500px;
+  height: 500px;
+  background: #5c6fff;
+  top: -20%;
+  left: -10%;
+  animation: pulse 12s infinite alternate;
+}
+
+.blob2 {
+  width: 400px;
+  height: 400px;
+  background: #aa63ff;
+  bottom: -20%;
+  right: -5%;
+  animation: pulse 15s infinite alternate-reverse;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.1) translate(5%, 5%); }
+  100% { transform: scale(0.9) translate(-5%, -5%); }
+}
+
+.loginCard {
+  width: 100%;
+  max-width: 440px;
+  z-index: 1;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.logo {
+  width: 48px;
+  height: 48px;
+  background: var(--accent-gradient);
+  border-radius: 12px;
+  margin: 0 auto 20px;
+  box-shadow: 0 4px 15px rgba(92, 111, 255, 0.4);
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.header p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formGroup label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.submitBtn {
+  margin-top: 10px;
+  padding: 14px;
+}
+
+.footerInfo {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.footerInfo a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.footerInfo a:hover {
+  color: var(--accent-hover);
+}

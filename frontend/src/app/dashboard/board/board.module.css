@@ -1,0 +1,135 @@
+.boardWrapper {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 100px);
+}
+
+.boardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.boardHeader h1 {
+  font-weight: 600;
+  font-size: 1.8rem;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+}
+
+.filterChip {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filterChip:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-primary);
+}
+
+.boardColumns {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.column {
+  flex: 0 0 320px;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-md);
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+.columnHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.columnHeader h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.count {
+  background: rgba(255,255,255,0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.columnContent {
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ticketCard {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 16px;
+  cursor: grab;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ticketCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.ticketCard:active {
+  cursor: grabbing;
+}
+
+.ticketTitle {
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.ticketFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ticketType {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #ef4444; /* BUG default */
+  color: #fff;
+}
+.typeStory { background: #5c6fff; }
+.typeTask { background: #3b82f6; }
+
+.ticketKey {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}

@@ -1,0 +1,113 @@
+.dashHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.dashHeader h1 {
+  font-weight: 600;
+  font-size: 1.8rem;
+}
+
+.actionBar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.sprintBoard, .backlogBoard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 40px;
+  overflow: hidden;
+}
+
+.sprintHeader {
+  padding: 16px 24px;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sprintTitle h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: inline-block;
+  margin-right: 12px;
+}
+
+.sprintDates {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.btnOutline {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+.btnOutline:hover {
+  border-color: var(--text-primary);
+  box-shadow: none;
+}
+
+.issueList {
+  display: flex;
+  flex-direction: column;
+}
+
+.issueCard {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: background 0.2s;
+  cursor: grab;
+}
+
+.issueCard:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.issueCard:last-child {
+  border-bottom: none;
+}
+
+.issueType {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  border-radius: 4px;
+  min-width: 50px;
+  text-align: center;
+}
+
+.typeEpic { background: #904ee2; color: #fff; }
+.typeStory { background: #5c6fff; color: #fff; }
+.typeTask { background: #3b82f6; color: #fff; }
+.typeBug { background: #ef4444; color: #fff; }
+
+.issueKey {
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  width: 70px;
+}
+
+.issueTitle {
+  flex: 1;
+  font-size: 0.95rem;
+}
+
+.issuePriority {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}

@@ -6,6 +6,7 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { projectRoutes } from './modules/projects/projects.routes';
 import { sprintRoutes } from './modules/sprints/sprints.routes';
 import { itemRoutes } from './modules/items/items.routes';
+import { userRoutes } from './modules/users/users.routes';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/sprints', sprintRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/users', userRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });

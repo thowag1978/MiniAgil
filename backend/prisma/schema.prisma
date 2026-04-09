@@ -118,8 +118,10 @@ model Item {
   project_id         String
   sprint_id          String?
   parent_id          String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  acceptance_criteria String?  @db.Text
+  estimate            Int?
 
   reporter        User           @relation("ReportedItems", fields: [reporter_id], references: [id])
   assignee        User?          @relation("AssignedItems", fields: [assignee_id], references: [id])

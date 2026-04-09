@@ -1,85 +1,111 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styles from './board.module.css';
 import IssueModal from '../../../components/IssueModal';
+import CreateItemModal from '../../../components/CreateItemModal';
 
 export default function KanbanBoard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<any>(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const openIssue = (issueKey: string) => {
-    setSelectedIssue({ key: issueKey, title: 'Implementar layout do Dashboard', status: 'Em Progresso' });
+  const fetchItems = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      // For now, let's fetch all items. 
+      // If there's a selected project, we'd append ?project_id=...
+      const res = await fetch('http://localhost:4000/api/items', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  const openIssue = (issue: any) => {
+    setSelectedIssue(issue);
     setIsModalOpen(true);
   };
+
+  const handleIssueUpdate = () => {
+    fetchItems(); // refresh the board on save
+  };
+
+  const aFazerItems = items.filter(item => item.workflow_status?.name === 'A FAZER');
+  const emProgressoItems = items.filter(item => item.workflow_status?.name === 'EM PROGRESSO');
+  const paraRevisaoItems = items.filter(item => item.workflow_status?.name === 'PARA REVISÃO');
+  const concluidoItems = items.filter(item => item.workflow_status?.name === 'CONCLUÍDO');
+
+  const renderColumn = (title: string, columnItems: any[]) => (
+    <div className={styles.column}>
+      <div className={styles.columnHeader}>
+        <h3>{title}</h3>
+        <span className={styles.count}>{columnItems.length}</span>
+      </div>
+      <div className={styles.columnContent}>
+        {columnItems.map(item => (
+          <div key={item.id} className={styles.ticketCard} onClick={() => openIssue(item)}>
+            <div className={styles.ticketTitle}>{item.title}</div>
+            <div className={styles.ticketFooter}>
+              <span className={`${styles.ticketType} ${item.type === 'BUG' ? styles.typeBug : item.type === 'STORY' ? styles.typeStory : styles.typeTask}`}>
+                {item.type}
+              </span>
+              <span className={styles.ticketKey}>{item.project_key}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className={`animate-fade-in ${styles.boardWrapper}`}>
       <div className={styles.boardHeader}>
         <h1>Kanban do Projeto</h1>
         <div className={styles.filters}>
-          <span className={styles.filterChip}>Apenas meus tickets</span>
-          <span className={styles.filterChip}>Sprints Ativas</span>
+          <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Tarefa</button>
+          <button className={styles.filterChip} onClick={fetchItems}>🔄 Refresh</button>
         </div>
       </div>
       
-      <div className={styles.boardColumns}>
-        {/* Coluna 1 */}
-        <div className={styles.column}>
-          <div className={styles.columnHeader}>
-            <h3>A Fazer</h3>
-            <span className={styles.count}>2</span>
-          </div>
-          <div className={styles.columnContent}>
-            <div className={styles.ticketCard} onClick={() => openIssue('NXT-48')}>
-              <div className={styles.ticketTitle}>Corrigir bug de renderização no Kanban</div>
-              <div className={styles.ticketFooter}>
-                <span className={styles.ticketType}>BUG</span>
-                <span className={styles.ticketKey}>NXT-48</span>
-              </div>
-            </div>
-            <div className={styles.ticketCard} onClick={() => openIssue('WEB-12')}>
-              <div className={styles.ticketTitle}>Atualizar copy da landing page</div>
-              <div className={styles.ticketFooter}>
-                <span className={`${styles.ticketType} ${styles.typeTask}`}>TASK</span>
-                <span className={styles.ticketKey}>WEB-12</span>
-              </div>
-            </div>
-          </div>
+      {loading ? (
+        <div style={{ padding: 20 }}>Carregando tarefas...</div>
+      ) : (
+        <div className={styles.boardColumns}>
+          {renderColumn('A Fazer', aFazerItems)}
+          {renderColumn('Em Progresso', emProgressoItems)}
+          {renderColumn('Para Revisão', paraRevisaoItems)}
+          {renderColumn('Concluído', concluidoItems)}
         </div>
-        
-        {/* Coluna 2 */}
-        <div className={styles.column}>
-          <div className={styles.columnHeader}>
-            <h3>Em Progresso</h3>
-            <span className={styles.count}>1</span>
-          </div>
-          <div className={styles.columnContent}>
-            <div className={styles.ticketCard} onClick={() => openIssue('NXT-45')}>
-              <div className={styles.ticketTitle}>Implementar autenticação JWT no frontend</div>
-              <div className={styles.ticketFooter}>
-                <span className={`${styles.ticketType} ${styles.typeStory}`}>STORY</span>
-                <span className={styles.ticketKey}>NXT-45</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Coluna 3 */}
-        <div className={styles.column}>
-          <div className={styles.columnHeader}>
-            <h3>Concluído</h3>
-            <span className={styles.count}>0</span>
-          </div>
-          <div className={styles.columnContent}>
-            {/* Empty space */}
-          </div>
-        </div>
-      </div>
+      )}
 
       {isModalOpen && (
         <IssueModal 
           issue={selectedIssue} 
           onClose={() => setIsModalOpen(false)} 
+          onUpdate={handleIssueUpdate}
+        />
+      )}
+
+      {isCreateModalOpen && (
+        <CreateItemModal 
+          onClose={() => setIsCreateModalOpen(false)} 
+          onSuccess={() => {
+            setIsCreateModalOpen(false);
+            fetchItems();
+          }}
         />
       )}
     </div>

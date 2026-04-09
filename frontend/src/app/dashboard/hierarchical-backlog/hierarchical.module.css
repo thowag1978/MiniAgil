@@ -1,0 +1,151 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+}
+
+.treeContainer {
+  background: var(--surface-light);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.emptyState {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 40px;
+}
+
+.treeNode {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.nodeContent {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nodeContent:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nodeContent.epic {
+  border-left: 4px solid var(--primary-color);
+}
+
+.nodeContent.story {
+  border-left: 4px solid #4CAF50;
+}
+
+.nodeContent.task {
+  border-left: 4px solid #2196F3;
+}
+
+.expandBtn {
+  background: none;
+  border: none;
+  color: var(--text-color);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  transition: transform 0.2s ease;
+}
+
+.expandBtn.expanded {
+  transform: rotate(90deg);
+}
+
+.expandBtn.hidden {
+  visibility: hidden;
+}
+
+.nodeIcon {
+  margin-right: 10px;
+  font-size: 1.2rem;
+}
+
+.nodeInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.nodeTitle {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nodeMeta {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  display: flex;
+  gap: 15px;
+  margin-top: 4px;
+}
+
+.nodeActions {
+  display: flex;
+  gap: 10px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.nodeContent:hover .nodeActions {
+  opacity: 1;
+}
+
+.actionBtn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: var(--text-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.actionBtn:hover {
+  background: var(--primary-color);
+}
+
+.actionBtn.danger:hover {
+  background: #f44336;
+}
+
+.childrenContainer {
+  margin-left: 30px;
+  padding-left: 20px;
+  border-left: 1px dashed var(--border-color);
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+}

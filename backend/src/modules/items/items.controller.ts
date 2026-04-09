@@ -3,10 +3,23 @@ import { prisma } from '../../infrastructure/db';
 
 export class ItemsController {
   async create(req: any, res: Response) {
-    const { type, title, description, priority, project_id, sprint_id, parent_id, workflow_status_id } = req.body;
+    const { type, title, description, priority, project_id, sprint_id, parent_id, workflow_status_id, acceptance_criteria, estimate } = req.body;
 
     if (!type || !title || !project_id || !workflow_status_id) {
       return res.status(400).json({ error: 'Type, title, project_id, and workflow_status_id are required' });
+    }
+
+    // Rules for hierarchy
+    if (type === 'STORY') {
+      if (!parent_id) return res.status(400).json({ error: 'História de Usuário deve ter um Épico vinculado' });
+      const parent = await prisma.item.findUnique({ where: { id: parent_id } });
+      if (!parent || parent.type !== 'EPIC') return res.status(400).json({ error: 'O item pai deve ser um Épico válido' });
+    }
+
+    if (type === 'TASK') {
+      if (!parent_id) return res.status(400).json({ error: 'Atividade deve ter uma História vinculada' });
+      const parent = await prisma.item.findUnique({ where: { id: parent_id } });
+      if (!parent || parent.type !== 'STORY') return res.status(400).json({ error: 'O item pai deve ser uma História válida' });
     }
 
     const project = await prisma.project.findUnique({ where: { id: project_id } });
@@ -27,7 +40,9 @@ export class ItemsController {
         project_id,
         sprint_id,
         parent_id,
-        workflow_status_id
+        workflow_status_id,
+        acceptance_criteria,
+        estimate: estimate ? parseInt(estimate) : null
       }
     });
 
@@ -46,7 +61,9 @@ export class ItemsController {
       include: {
         assignee: { select: { name: true, email: true } },
         reporter: { select: { name: true } },
-        workflow_status: true
+        workflow_status: true,
+        parent: { select: { id: true, title: true, project_key: true, type: true } },
+        children: { select: { id: true, title: true, project_key: true, type: true, workflow_status: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -56,7 +73,7 @@ export class ItemsController {
 
   async updateField(req: any, res: Response) {
     const { id } = req.params;
-    const { workflow_status_id, assignee_id, sprint_id, priority, title, description } = req.body;
+    const { workflow_status_id, assignee_id, sprint_id, priority, title, description, parent_id, acceptance_criteria, estimate } = req.body;
 
     const data: any = {};
     if (workflow_status_id !== undefined) data.workflow_status_id = workflow_status_id;
@@ -65,6 +82,9 @@ export class ItemsController {
     if (priority !== undefined) data.priority = priority;
     if (title !== undefined) data.title = title;
     if (description !== undefined) data.description = description;
+    if (parent_id !== undefined) data.parent_id = parent_id;
+    if (acceptance_criteria !== undefined) data.acceptance_criteria = acceptance_criteria;
+    if (estimate !== undefined) data.estimate = estimate ? parseInt(estimate) : null;
 
     // Handle clearing sprint (sending null)
     if (sprint_id === null) data.sprint_id = null;
@@ -72,12 +92,76 @@ export class ItemsController {
     // Handle clearing assignee
     if (assignee_id === null) data.assignee_id = null;
 
+    // Handle clearing parent
+    if (parent_id === null) data.parent_id = null;
+
     const updated = await prisma.item.update({
         where: { id },
         data,
-        include: { workflow_status: true, assignee: true }
+        include: { 
+          workflow_status: true, 
+          assignee: true,
+          parent: { select: { id: true, title: true, project_key: true, type: true } },
+          children: { select: { id: true, title: true, project_key: true, type: true, workflow_status: true } }
+        }
     });
 
     res.json(updated);
+  }
+
+  async listStatuses(req: Request, res: Response) {
+    const statuses = await prisma.workflowStatus.findMany({ orderBy: { order: 'asc' } });
+    res.json(statuses);
+  }
+
+  async listHierarchical(req: any, res: Response) {
+    const { project_id } = req.query;
+    if (!project_id) return res.status(400).json({ error: 'project_id is required' });
+
+    const epics = await prisma.item.findMany({
+      where: {
+        project_id: String(project_id),
+        type: 'EPIC'
+      },
+      include: {
+        assignee: { select: { name: true, email: true } },
+        workflow_status: true,
+        children: {
+          include: {
+            assignee: { select: { name: true, email: true } },
+            workflow_status: true,
+            children: {
+              include: {
+                assignee: { select: { name: true, email: true } },
+                workflow_status: true,
+              },
+              orderBy: { createdAt: 'asc' }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(epics);
+  }
+
+  async delete(req: any, res: Response) {
+    const { id } = req.params;
+
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { _count: { select: { children: true } } }
+    });
+
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    if (item._count.children > 0) {
+      return res.status(400).json({ error: 'Não é possível excluir um item que possui filhos vinculados.' });
+    }
+
+    await prisma.item.delete({ where: { id } });
+    res.json({ success: true });
   }
 }

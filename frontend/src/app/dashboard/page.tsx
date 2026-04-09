@@ -1,12 +1,19 @@
-import React from 'react';
+'use client';
+import React, { useState } from 'react';
 import styles from './dashboard.module.css';
+import CreateItemModal from '../../components/CreateItemModal';
 
 export default function DashboardPage() {
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
   return (
     <div className="animate-fade-in">
-      <div className={styles.dashHeader}>
-        <h1>Meus Itens</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Resumo das tarefas atribuídas a você no momento.</p>
+      <div className={styles.dashHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1>Meus Itens</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>Resumo das tarefas atribuídas a você no momento.</p>
+        </div>
+        <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Item</button>
       </div>
       
       <div className={styles.metricsGrid}>
@@ -50,6 +57,16 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {isCreateModalOpen && (
+        <CreateItemModal 
+          onClose={() => setIsCreateModalOpen(false)} 
+          onSuccess={() => {
+            setIsCreateModalOpen(false);
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

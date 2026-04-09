@@ -1,14 +1,18 @@
-import React from 'react';
+'use client';
+import React, { useState } from 'react';
 import styles from './backlog.module.css';
+import CreateItemModal from '../../../components/CreateItemModal';
 
 export default function BacklogPage() {
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
   return (
     <div className="animate-fade-in">
       <div className={styles.dashHeader}>
         <h1>Backlog do Projeto</h1>
         <div className={styles.actionBar}>
            <input type="text" className="input-glass" placeholder="🔍 Buscar epic, story ou tarefa..." style={{ maxWidth: '300px' }} />
-           <button className="btn-primary">+ Criar Item</button>
+           <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Item</button>
         </div>
       </div>
       
@@ -60,6 +64,16 @@ export default function BacklogPage() {
              {/* Em um cenário real, aqui entraria a lib dnd-kit para arrastar e soltar */}
          </div>
       </div>
+
+      {isCreateModalOpen && (
+        <CreateItemModal 
+          onClose={() => setIsCreateModalOpen(false)} 
+          onSuccess={() => {
+            setIsCreateModalOpen(false);
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

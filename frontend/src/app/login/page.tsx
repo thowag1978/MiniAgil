@@ -26,6 +26,9 @@ export default function LoginPage() {
         const data = await res.json();
         // Salva o token localmente e redireciona (abordagem MVP)
         localStorage.setItem('token', data.token);
+        if (data.user && data.user.name) {
+          localStorage.setItem('userName', data.user.name);
+        }
         // O Next.js router do app nativo
         window.location.href = '/dashboard';
       } else {

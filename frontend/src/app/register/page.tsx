@@ -32,7 +32,7 @@ export default function RegisterPage() {
         const err = await res.json();
         setErrorMsg(err.error || 'Erro ao criar conta!');
       }
-    } catch (err) {
+    } catch {
       setErrorMsg('Falha de conexão com o servidor.');
     } finally {
       setLoading(false);

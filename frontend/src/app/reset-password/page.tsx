@@ -43,7 +43,7 @@ export default function ResetPasswordPage() {
         const err = await res.json();
         setErrorMsg(err.error || 'Token inválido ou expirado.');
       }
-    } catch (err) {
+    } catch {
       setErrorMsg('Falha de conexão com o servidor.');
     } finally {
       setLoading(false);

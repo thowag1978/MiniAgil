@@ -3,9 +3,19 @@ import React, { useState, useEffect } from 'react';
 import styles from './hierarchical.module.css';
 import HierarchicalItemModal from '../../../components/HierarchicalItemModal';
 
+interface TreeItem {
+  id: string;
+  project_key: string;
+  title: string;
+  priority: string;
+  estimate?: number | null;
+  assignee?: { name: string } | null;
+  workflow_status?: { name?: string } | null;
+  children: TreeItem[];
+}
+
 export default function HierarchicalBacklog() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<TreeItem[]>([]);
   const [projectId, setProjectId] = useState('');
   const [loading, setLoading] = useState(true);
   
@@ -18,10 +28,8 @@ export default function HierarchicalBacklog() {
     isOpen: boolean;
     mode: 'CREATE' | 'EDIT';
     type: 'EPIC' | 'STORY' | 'TASK';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    parentData?: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    initialData?: any;
+    parentData?: TreeItem;
+    initialData?: TreeItem;
   }>({ isOpen: false, mode: 'CREATE', type: 'EPIC' });
 
   const fetchData = async () => {
@@ -44,7 +52,7 @@ export default function HierarchicalBacklog() {
       // 2. Get Hierarchical Items
       const itemsRes = await fetch(`http://localhost:4000/api/items/hierarchical?project_id=${pId}`, { headers });
       if (itemsRes.ok) {
-        const data = await itemsRes.json();
+        const data: TreeItem[] = await itemsRes.json();
         setItems(data);
       }
     } catch (err) {
@@ -92,25 +100,22 @@ export default function HierarchicalBacklog() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filterItem = (item: any): boolean => {
+  const filterItem = (item: TreeItem): boolean => {
     const matchSearch = item.title.toLowerCase().includes(search.toLowerCase()) || item.project_key.toLowerCase().includes(search.toLowerCase());
     const matchPriority = priorityFilter ? item.priority === priorityFilter : true;
     const matchStatus = statusFilter ? item.workflow_status?.name === statusFilter : true;
     return matchSearch && matchPriority && matchStatus;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const hasMatchingChild = (item: any): boolean => {
+  const hasMatchingChild = (item: TreeItem): boolean => {
     if (filterItem(item)) return true;
     if (item.children && item.children.length > 0) {
-      return item.children.some((child: any) => hasMatchingChild(child));
+      return item.children.some((child) => hasMatchingChild(child));
     }
     return false;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderItem = (item: any, type: 'EPIC'|'STORY'|'TASK') => {
+  const renderItem = (item: TreeItem, type: 'EPIC'|'STORY'|'TASK') => {
     if (!hasMatchingChild(item)) return null;
 
     const isExpanded = expanded.has(item.id);
@@ -174,8 +179,7 @@ export default function HierarchicalBacklog() {
 
         {hasChildren && isExpanded && (
           <div className={styles.childrenContainer}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {item.children.map((child: any) => renderItem(child, type === 'EPIC' ? 'STORY' : 'TASK'))}
+            {item.children.map((child) => renderItem(child, type === 'EPIC' ? 'STORY' : 'TASK'))}
           </div>
         )}
       </div>
@@ -216,8 +220,8 @@ export default function HierarchicalBacklog() {
         <select className="input-glass" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">Todos Status</option>
           <option value="A FAZER">A FAZER</option>
-          <option value="EM ANDAMENTO">EM ANDAMENTO</option>
-          <option value="CONCLUIDO">CONCLUIDO</option>
+          <option value="EM PROGRESSO">EM PROGRESSO</option>
+          <option value="CONCLUÍDO">CONCLUÍDO</option>
         </select>
       </div>
 

@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
         const err = await res.json();
         setErrorMsg(err.error || 'Ocorreu um erro.');
       }
-    } catch (err) {
+    } catch {
       setErrorMsg('Falha de conexão com o servidor.');
     } finally {
       setLoading(false);

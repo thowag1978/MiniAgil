@@ -35,7 +35,7 @@ export default function LoginPage() {
         const err = await res.json();
         setErrorMsg(err.error || 'Credenciais inválidas!');
       }
-    } catch (err) {
+    } catch {
       setErrorMsg('Falha de conexão com o servidor. O backend está rodando?');
     } finally {
       setLoading(false);

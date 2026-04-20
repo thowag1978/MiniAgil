@@ -4,23 +4,48 @@ import styles from './board.module.css';
 import IssueModal from '../../../components/IssueModal';
 import CreateItemModal from '../../../components/CreateItemModal';
 
+interface WorkflowStatus {
+  name?: string;
+}
+
+interface BoardItem {
+  id: string;
+  title: string;
+  type: 'EPIC' | 'STORY' | 'TASK' | 'SUBTASK' | 'BUG';
+  project_key: string;
+  workflow_status_id?: string;
+  workflow_status?: WorkflowStatus;
+  project_id?: string;
+  description?: string | null;
+  priority?: string;
+  parent_id?: string | null;
+  parent?: { project_key: string; title: string };
+  assignee?: { name: string };
+  reporter?: { name: string };
+  children?: Array<{
+    id: string;
+    title: string;
+    type: string;
+    project_key: string;
+    workflow_status?: WorkflowStatus;
+  }>;
+}
+
 export default function KanbanBoard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
-  const [items, setItems] = useState<any[]>([]);
+  const [selectedIssue, setSelectedIssue] = useState<BoardItem | null>(null);
+  const [items, setItems] = useState<BoardItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchItems = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      // For now, let's fetch all items. 
-      // If there's a selected project, we'd append ?project_id=...
       const res = await fetch('http://localhost:4000/api/items', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
+        const data: BoardItem[] = await res.json();
         setItems(data);
       }
     } catch (err) {
@@ -34,13 +59,13 @@ export default function KanbanBoard() {
     fetchItems();
   }, [fetchItems]);
 
-  const openIssue = (issue: any) => {
+  const openIssue = (issue: BoardItem) => {
     setSelectedIssue(issue);
     setIsModalOpen(true);
   };
 
   const handleIssueUpdate = () => {
-    fetchItems(); // refresh the board on save
+    fetchItems();
   };
 
   const aFazerItems = items.filter(item => item.workflow_status?.name === 'A FAZER');
@@ -48,7 +73,7 @@ export default function KanbanBoard() {
   const paraRevisaoItems = items.filter(item => item.workflow_status?.name === 'PARA REVISÃO');
   const concluidoItems = items.filter(item => item.workflow_status?.name === 'CONCLUÍDO');
 
-  const renderColumn = (title: string, columnItems: any[]) => (
+  const renderColumn = (title: string, columnItems: BoardItem[]) => (
     <div className={styles.column}>
       <div className={styles.columnHeader}>
         <h3>{title}</h3>
@@ -76,10 +101,10 @@ export default function KanbanBoard() {
         <h1>Kanban do Projeto</h1>
         <div className={styles.filters}>
           <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Tarefa</button>
-          <button className={styles.filterChip} onClick={fetchItems}>🔄 Refresh</button>
+          <button className={styles.filterChip} onClick={fetchItems}>Refresh</button>
         </div>
       </div>
-      
+
       {loading ? (
         <div style={{ padding: 20 }}>Carregando tarefas...</div>
       ) : (
@@ -92,16 +117,16 @@ export default function KanbanBoard() {
       )}
 
       {isModalOpen && (
-        <IssueModal 
-          issue={selectedIssue} 
-          onClose={() => setIsModalOpen(false)} 
+        <IssueModal
+          issue={selectedIssue}
+          onClose={() => setIsModalOpen(false)}
           onUpdate={handleIssueUpdate}
         />
       )}
 
       {isCreateModalOpen && (
-        <CreateItemModal 
-          onClose={() => setIsCreateModalOpen(false)} 
+        <CreateItemModal
+          onClose={() => setIsCreateModalOpen(false)}
           onSuccess={() => {
             setIsCreateModalOpen(false);
             fetchItems();

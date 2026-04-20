@@ -96,6 +96,51 @@
   margin-bottom: 16px;
 }
 
+.projectSection {
+  margin-bottom: 32px;
+}
+
+.projectSection h2 {
+  font-size: 1.2rem;
+  margin-bottom: 16px;
+}
+
+.projectGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.projectCard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 16px;
+}
+
+.projectHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.projectName {
+  font-weight: 600;
+}
+
+.projectKey {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.projectStats {
+  display: flex;
+  gap: 16px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
 .itemList {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);

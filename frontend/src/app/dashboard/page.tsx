@@ -17,6 +17,7 @@ export default function DashboardPage() {
 
   const counts = data?.counts || { pending: 0, inProgress: 0, review: 0, done: 0 };
   const recentItems = data?.recentItems || [];
+  const projectOverview = data?.projectOverview || [];
 
   return (
     <div className="animate-fade-in">
@@ -47,6 +48,29 @@ export default function DashboardPage() {
               <div className={styles.metricTitle}>PARA REVIEW</div>
               <div className={styles.metricValue}>{counts.review}</div>
             </div>
+          </div>
+
+          <div className={styles.projectSection}>
+            <h2>Visão por Projeto</h2>
+            {projectOverview.length === 0 ? (
+              <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhum projeto encontrado.</div>
+            ) : (
+              <div className={styles.projectGrid}>
+                {projectOverview.map((project) => (
+                  <div key={project.id} className={styles.projectCard}>
+                    <div className={styles.projectHeader}>
+                      <div className={styles.projectName}>{project.name}</div>
+                      <div className={styles.projectKey}>{project.key_prefix}</div>
+                    </div>
+                    <div className={styles.projectStats}>
+                      <span>Total: {project.totalItems}</span>
+                      <span>Abertos: {project.openItems}</span>
+                      <span>Concluídos: {project.doneItems}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className={styles.recentSection}>

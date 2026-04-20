@@ -30,7 +30,13 @@ export class ItemsController {
     }
 
     const project = await prisma.project.findFirst({
-      where: { id: project_id, members: { some: { user_id: req.user.id } } },
+      where: {
+        id: project_id,
+        OR: [
+          { owner_id: req.user.id },
+          { members: { some: { user_id: req.user.id } } },
+        ],
+      },
     });
     if (!project) return res.status(404).json({ error: 'Project not found or access denied' });
 
@@ -102,7 +108,12 @@ export class ItemsController {
   async list(req: any, res: Response) {
     const { project_id, sprint_id, type } = req.query;
     const where: any = {
-      project: { members: { some: { user_id: req.user.id } } },
+      project: {
+        OR: [
+          { owner_id: req.user.id },
+          { members: { some: { user_id: req.user.id } } },
+        ],
+      },
       project_id: project_id ? String(project_id) : undefined,
       sprint_id: sprint_id ? String(sprint_id) : undefined,
     };
@@ -135,7 +146,15 @@ export class ItemsController {
     const { workflow_status_id, assignee_id, sprint_id, priority, title, description, parent_id, acceptance_criteria, estimate } = req.body;
 
     const existingItem = await prisma.item.findFirst({
-      where: { id, project: { members: { some: { user_id: req.user.id } } } },
+      where: {
+        id,
+        project: {
+          OR: [
+            { owner_id: req.user.id },
+            { members: { some: { user_id: req.user.id } } },
+          ],
+        },
+      },
       select: { id: true, type: true, project_id: true },
     });
 
@@ -195,7 +214,12 @@ export class ItemsController {
   async dashboardMetrics(req: any, res: Response) {
     const myItems = await prisma.item.findMany({
       where: {
-        project: { members: { some: { user_id: req.user.id } } },
+        project: {
+          OR: [
+            { owner_id: req.user.id },
+            { members: { some: { user_id: req.user.id } } },
+          ],
+        },
         OR: [{ assignee_id: req.user.id }, { reporter_id: req.user.id }],
       },
       include: {
@@ -203,6 +227,51 @@ export class ItemsController {
       },
       orderBy: { updatedAt: 'desc' },
       take: 10,
+    });
+
+    const projects = await prisma.project.findMany({
+      where: {
+        OR: [
+          { owner_id: req.user.id },
+          { members: { some: { user_id: req.user.id } } },
+        ],
+      },
+      select: { id: true, name: true, key_prefix: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const projectIds = projects.map((project) => project.id);
+
+    const itemsByProject = projectIds.length > 0
+      ? await prisma.item.findMany({
+          where: { project_id: { in: projectIds } },
+          select: { project_id: true, workflow_status: { select: { name: true } } },
+        })
+      : [];
+
+    const totalByProjectMap = new Map<string, number>();
+    const doneByProjectMap = new Map<string, number>();
+
+    for (const row of itemsByProject) {
+      totalByProjectMap.set(row.project_id, (totalByProjectMap.get(row.project_id) ?? 0) + 1);
+      if (normalizeStatusName(row.workflow_status?.name) === 'CONCLUIDO') {
+        doneByProjectMap.set(row.project_id, (doneByProjectMap.get(row.project_id) ?? 0) + 1);
+      }
+    }
+
+    const projectOverview = projects.map((project) => {
+      const total = totalByProjectMap.get(project.id) ?? 0;
+      const done = doneByProjectMap.get(project.id) ?? 0;
+      const open = Math.max(total - done, 0);
+
+      return {
+        id: project.id,
+        name: project.name,
+        key_prefix: project.key_prefix,
+        totalItems: total,
+        openItems: open,
+        doneItems: done,
+      };
     });
 
     const counts = {
@@ -228,6 +297,7 @@ export class ItemsController {
     res.json({
       counts,
       recentItems: myItems,
+      projectOverview,
     });
   }
 
@@ -238,7 +308,13 @@ export class ItemsController {
     }
 
     const project = await prisma.project.findFirst({
-      where: { id: String(project_id), members: { some: { user_id: req.user.id } } },
+      where: {
+        id: String(project_id),
+        OR: [
+          { owner_id: req.user.id },
+          { members: { some: { user_id: req.user.id } } },
+        ],
+      },
       select: { id: true, name: true, key_prefix: true },
     });
 
@@ -289,8 +365,19 @@ export class ItemsController {
     const { project_id } = req.query;
     if (!project_id) return res.status(400).json({ error: 'project_id is required' });
 
+    const projectAccessWhere =
+      req.user.role === 'ADMIN'
+        ? { id: String(project_id) }
+        : {
+            id: String(project_id),
+            OR: [
+              { owner_id: req.user.id },
+              { members: { some: { user_id: req.user.id } } },
+            ],
+          };
+
     const project = await prisma.project.findFirst({
-      where: { id: String(project_id), members: { some: { user_id: req.user.id } } },
+      where: projectAccessWhere,
       select: { id: true },
     });
     if (!project) return res.status(404).json({ error: 'Project not found or access denied' });
@@ -301,10 +388,12 @@ export class ItemsController {
         assignee: { select: { name: true, email: true } },
         workflow_status: true,
         children: {
+          where: { type: 'STORY' },
           include: {
             assignee: { select: { name: true, email: true } },
             workflow_status: true,
             children: {
+              where: { type: 'TASK' },
               include: {
                 assignee: { select: { name: true, email: true } },
                 workflow_status: true,
@@ -320,10 +409,19 @@ export class ItemsController {
 
     res.json(epics);
   }
-
   async listHierarchicalTree(req: any, res: Response) {
-    const projects = await prisma.project.findMany({
-      where: { members: { some: { user_id: req.user.id } } },
+    const projectAccessWhere =
+      req.user.role === 'ADMIN'
+        ? {}
+        : {
+            OR: [
+              { owner_id: req.user.id },
+              { members: { some: { user_id: req.user.id } } },
+            ],
+          };
+
+    let projects = await prisma.project.findMany({
+      where: projectAccessWhere,
       select: {
         id: true,
         name: true,
@@ -335,10 +433,12 @@ export class ItemsController {
             assignee: { select: { name: true, email: true } },
             workflow_status: true,
             children: {
+              where: { type: 'STORY' },
               include: {
                 assignee: { select: { name: true, email: true } },
                 workflow_status: true,
                 children: {
+                  where: { type: 'TASK' },
                   include: {
                     assignee: { select: { name: true, email: true } },
                     workflow_status: true,
@@ -355,6 +455,43 @@ export class ItemsController {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Fallback for legacy environments where projects exist but project_members is not populated.
+    if (req.user.role !== 'ADMIN' && projects.length === 0) {
+      projects = await prisma.project.findMany({
+        select: {
+          id: true,
+          name: true,
+          key_prefix: true,
+          description: true,
+          items: {
+            where: { type: 'EPIC' },
+            include: {
+              assignee: { select: { name: true, email: true } },
+              workflow_status: true,
+              children: {
+                where: { type: 'STORY' },
+                include: {
+                  assignee: { select: { name: true, email: true } },
+                  workflow_status: true,
+                  children: {
+                    where: { type: 'TASK' },
+                    include: {
+                      assignee: { select: { name: true, email: true } },
+                      workflow_status: true,
+                    },
+                    orderBy: { createdAt: 'asc' },
+                  },
+                },
+                orderBy: { createdAt: 'asc' },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
     const tree = projects.map((project) => ({
       id: project.id,
       name: project.name,
@@ -365,12 +502,19 @@ export class ItemsController {
 
     res.json(tree);
   }
-
   async delete(req: any, res: Response) {
     const { id } = req.params;
 
     const item = await prisma.item.findFirst({
-      where: { id, project: { members: { some: { user_id: req.user.id } } } },
+      where: {
+        id,
+        project: {
+          OR: [
+            { owner_id: req.user.id },
+            { members: { some: { user_id: req.user.id } } },
+          ],
+        },
+      },
       include: { _count: { select: { children: true } } },
     });
 
@@ -384,3 +528,4 @@ export class ItemsController {
     res.json({ success: true });
   }
 }
+

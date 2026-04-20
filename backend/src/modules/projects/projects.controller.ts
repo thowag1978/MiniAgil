@@ -35,9 +35,10 @@ export class ProjectsController {
   async list(req: any, res: Response) {
     const projects = await prisma.project.findMany({
       where: {
-        members: {
-          some: { user_id: req.user.id }
-        }
+        OR: [
+          { owner_id: req.user.id },
+          { members: { some: { user_id: req.user.id } } }
+        ],
       },
       include: {
         members: {
@@ -53,7 +54,10 @@ export class ProjectsController {
     const project = await prisma.project.findFirst({
       where: {
         id,
-        members: { some: { user_id: req.user.id } }
+        OR: [
+          { owner_id: req.user.id },
+          { members: { some: { user_id: req.user.id } } }
+        ],
       },
       include: {
         members: { include: { user: { select: { id: true, name: true } } } },

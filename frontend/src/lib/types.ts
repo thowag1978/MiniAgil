@@ -74,6 +74,14 @@ export interface DashboardMetrics {
     done: number;
   };
   recentItems: Item[];
+  projectOverview: Array<{
+    id: string;
+    name: string;
+    key_prefix: string;
+    totalItems: number;
+    openItems: number;
+    doneItems: number;
+  }>;
 }
 
 export interface BacklogOverview {

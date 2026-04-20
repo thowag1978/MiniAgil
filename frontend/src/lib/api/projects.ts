@@ -14,5 +14,11 @@ export const projectsApi = {
       body: JSON.stringify(input),
     });
   },
+  update(id: string, input: { name: string; key_prefix: string; description?: string }) {
+    return apiRequest<Project>(`/api/projects/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
 };
 

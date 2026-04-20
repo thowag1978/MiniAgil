@@ -88,13 +88,13 @@ export default function HierarchicalBacklog() {
 
     const isExpanded = expanded.has(item.id);
     const hasChildren = item.children && item.children.length > 0;
-    const icons = { EPIC: '??', STORY: '??', TASK: '?' };
+    const icons = { EPIC: 'EP', STORY: 'ST', TASK: 'TS' };
     const classes = { EPIC: styles.epic, STORY: styles.story, TASK: styles.task };
 
     return (
       <div key={item.id} className={styles.treeNode}>
         <div className={`${styles.nodeContent} ${classes[type]}`}>
-          <button className={`${styles.expandBtn} ${!hasChildren ? styles.hidden : ''} ${isExpanded ? styles.expanded : ''}`} onClick={() => toggleExpand(item.id)}>?</button>
+          <button className={`${styles.expandBtn} ${!hasChildren ? styles.hidden : ''} ${isExpanded ? styles.expanded : ''}`} onClick={() => toggleExpand(item.id)}>▶</button>
           <div className={styles.nodeIcon}>{icons[type]}</div>
           <div className={styles.nodeInfo}>
             <div className={styles.nodeTitle}>

@@ -11,7 +11,7 @@ export class ApiError extends Error {
 }
 
 export function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  return process.env.NEXT_PUBLIC_API_URL || 'https://localhost:9000';
 }
 
 interface RequestOptions extends RequestInit {

@@ -2,15 +2,15 @@ import { Request, Response } from 'express';
 import { ItemType, Prisma } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
 
-export class ItemsController {
-  private normalizeStatusName(statusName?: string | null): string {
-    return (statusName || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toUpperCase()
-      .trim();
-  }
+function normalizeStatusName(statusName?: string | null): string {
+  return (statusName || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim();
+}
 
+export class ItemsController {
   async create(req: any, res: Response) {
     const {
       type,
@@ -213,7 +213,7 @@ export class ItemsController {
     };
 
     for (const item of myItems) {
-      const normalized = this.normalizeStatusName(item.workflow_status?.name);
+      const normalized = normalizeStatusName(item.workflow_status?.name);
       if (normalized === 'CONCLUIDO') {
         counts.done += 1;
       } else if (normalized === 'EM PROGRESSO') {

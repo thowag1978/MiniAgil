@@ -83,3 +83,11 @@ export interface BacklogOverview {
   backlogItems: Item[];
 }
 
+export interface ProjectHierarchy {
+  id: string;
+  name: string;
+  key_prefix: string;
+  description?: string | null;
+  epics: Item[];
+}
+

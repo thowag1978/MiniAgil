@@ -1,5 +1,5 @@
 ﻿import { apiRequest } from './client';
-import type { BacklogOverview, DashboardMetrics, Item, ItemType, WorkflowStatus } from '@/lib/types';
+import type { BacklogOverview, DashboardMetrics, Item, ItemType, ProjectHierarchy, WorkflowStatus } from '@/lib/types';
 
 export interface CreateItemInput {
   type: ItemType;
@@ -41,6 +41,9 @@ export const itemsApi = {
   },
   listHierarchical(projectId: string) {
     return apiRequest<Item[]>(`/api/items/hierarchical?project_id=${projectId}`);
+  },
+  listHierarchicalTree() {
+    return apiRequest<ProjectHierarchy[]>('/api/items/hierarchical-tree');
   },
   dashboardMetrics() {
     return apiRequest<DashboardMetrics>('/api/items/dashboard-metrics');

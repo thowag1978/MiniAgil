@@ -321,6 +321,51 @@ export class ItemsController {
     res.json(epics);
   }
 
+  async listHierarchicalTree(req: any, res: Response) {
+    const projects = await prisma.project.findMany({
+      where: { members: { some: { user_id: req.user.id } } },
+      select: {
+        id: true,
+        name: true,
+        key_prefix: true,
+        description: true,
+        items: {
+          where: { type: 'EPIC' },
+          include: {
+            assignee: { select: { name: true, email: true } },
+            workflow_status: true,
+            children: {
+              include: {
+                assignee: { select: { name: true, email: true } },
+                workflow_status: true,
+                children: {
+                  include: {
+                    assignee: { select: { name: true, email: true } },
+                    workflow_status: true,
+                  },
+                  orderBy: { createdAt: 'asc' },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const tree = projects.map((project) => ({
+      id: project.id,
+      name: project.name,
+      key_prefix: project.key_prefix,
+      description: project.description,
+      epics: project.items,
+    }));
+
+    res.json(tree);
+  }
+
   async delete(req: any, res: Response) {
     const { id } = req.params;
 

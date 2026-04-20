@@ -13,7 +13,8 @@ interface HierarchicalItemModalProps {
   onSuccess: () => void;
   mode: 'CREATE' | 'EDIT';
   type: 'EPIC' | 'STORY' | 'TASK';
-  parentData?: { id: string; title: string; project_key: string };
+  projectData?: { id: string; name: string; key_prefix: string };
+  parentData?: { id: string; title: string; project_key: string; project_id: string };
   initialData?: Item;
 }
 
@@ -29,13 +30,13 @@ interface FormData {
   estimate: string;
 }
 
-export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, parentData, initialData }: HierarchicalItemModalProps) {
+export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, projectData, parentData, initialData }: HierarchicalItemModalProps) {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState<FormData>({
     title: initialData?.title || '',
     description: initialData?.description || '',
     priority: initialData?.priority || 'MEDIUM',
-    project_id: initialData?.project_id || '',
+    project_id: initialData?.project_id || projectData?.id || parentData?.project_id || '',
     workflow_status_id: initialData?.workflow_status_id || '',
     assignee_id: initialData?.assignee_id || '',
     parent_id: initialData?.parent_id || parentData?.id || '',

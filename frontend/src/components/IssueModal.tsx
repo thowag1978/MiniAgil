@@ -1,60 +1,27 @@
-'use client';
-import React, { useState, useEffect } from 'react';
+﻿'use client';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './modal.module.css';
+import { itemsApi } from '@/lib/api/items';
+import { queryKeys } from '@/lib/query/keys';
+import type { Item, Priority } from '@/lib/types';
 
-interface WorkflowStatus {
-  id: string;
-  name: string;
-}
-
-interface ParentOption {
-  id: string;
-  project_key: string;
-  title: string;
-}
-
-interface IssueChild {
-  id: string;
-  title: string;
-  type: string;
-  project_key: string;
-  workflow_status?: {
-    name?: string;
-  } | null;
-}
-
-interface IssueData {
-  id: string;
-  type: 'EPIC' | 'STORY' | 'TASK' | 'SUBTASK' | 'BUG';
-  title: string;
-  project_key: string;
-  project_id?: string;
-  description?: string | null;
-  priority?: string;
-  workflow_status_id?: string;
-  workflow_status?: { name?: string } | null;
-  parent_id?: string | null;
-  parent?: { project_key: string; title: string } | null;
-  assignee?: { name: string } | null;
-  reporter?: { name: string } | null;
-  children?: IssueChild[];
+interface IssueModalProps {
+  issue: Item | null;
+  onClose: () => void;
+  onUpdate?: () => void;
 }
 
 interface FormData {
   title: string;
   description: string;
-  priority: string;
+  priority: Priority;
   workflow_status_id: string;
   parent_id: string;
 }
 
-interface IssueModalProps {
-  issue: IssueData | null;
-  onClose: () => void;
-  onUpdate?: () => void;
-}
-
 export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps) {
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     title: issue?.title || '',
@@ -63,93 +30,45 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
     workflow_status_id: issue?.workflow_status_id || '',
     parent_id: issue?.parent_id || '',
   });
-  const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
-  const [potentialParents, setPotentialParents] = useState<ParentOption[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchStatuses = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:4000/api/items/statuses', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data: WorkflowStatus[] = await res.json();
-          setStatuses(data);
-        }
-      } catch (err) {
-        console.error(err);
+  const statusesQuery = useQuery({ queryKey: queryKeys.itemStatuses, queryFn: () => itemsApi.listStatuses() });
+
+  const fetchType = issue?.type === 'STORY' ? 'EPIC' : (issue?.type === 'TASK' || issue?.type === 'BUG' ? 'STORY' : null);
+  const parentCandidatesQuery = useQuery({
+    queryKey: queryKeys.itemsByFilter(`${issue?.project_id || 'none'}:${fetchType || 'none'}`),
+    queryFn: () => itemsApi.list({ project_id: issue?.project_id, type: fetchType || undefined }),
+    enabled: Boolean(isEditing && issue?.project_id && fetchType),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!issue) throw new Error('Issue not selected');
+      return itemsApi.update(issue.id, {
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        workflow_status_id: formData.workflow_status_id,
+        parent_id: formData.parent_id || null,
+      });
+    },
+    onSuccess: () => {
+      setIsEditing(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.items });
+      if (issue?.project_id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalItems(issue.project_id) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.backlogOverview(issue.project_id) });
       }
-    };
-    fetchStatuses();
-  }, []);
-
-  useEffect(() => {
-    if (!isEditing || !issue || !issue.project_id) return;
-
-    let fetchType = '';
-    if (issue.type === 'STORY') fetchType = 'EPIC';
-    else if (issue.type === 'TASK' || issue.type === 'BUG') fetchType = 'STORY';
-
-    if (!fetchType) return;
-
-    const fetchParents = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:4000/api/items?project_id=${issue.project_id}&type=${fetchType}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data: ParentOption[] = await res.json();
-          setPotentialParents(data);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchParents();
-  }, [isEditing, issue]);
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardMetrics });
+      if (onUpdate) onUpdate();
+    },
+    onError: (error: Error) => {
+      alert(`Erro ao salvar as alterações: ${error.message}`);
+    },
+  });
 
   if (!issue) return null;
 
-  const handleChange = (field: keyof FormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSave = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-
-      const payload = {
-        ...formData,
-        parent_id: formData.parent_id === '' ? null : formData.parent_id,
-      };
-
-      const res = await fetch(`http://localhost:4000/api/items/${issue.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        setIsEditing(false);
-        if (onUpdate) onUpdate();
-      } else {
-        alert('Erro ao salvar as alteracoes');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Erro de rede ao salvar');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const statusName = statuses.find(s => s.id === (isEditing ? formData.workflow_status_id : issue.workflow_status_id))?.name || issue.workflow_status?.name || '';
+  const statusName = statusesQuery.data?.find(s => s.id === (isEditing ? formData.workflow_status_id : issue.workflow_status_id))?.name || issue.workflow_status?.name || '';
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -162,24 +81,13 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
           </div>
           <div>
             {!isEditing ? (
-              <button
-                className="btn-secondary"
-                style={{ marginRight: 10, padding: '4px 12px', fontSize: '0.85rem' }}
-                onClick={() => setIsEditing(true)}
-              >
-                Editar
-              </button>
+              <button className="btn-secondary" style={{ marginRight: 10, padding: '4px 12px', fontSize: '0.85rem' }} onClick={() => setIsEditing(true)}>Editar</button>
             ) : (
-              <button
-                className="btn-primary"
-                style={{ marginRight: 10, padding: '4px 12px', fontSize: '0.85rem' }}
-                onClick={handleSave}
-                disabled={loading}
-              >
-                {loading ? 'Salvando...' : 'Salvar'}
+              <button className="btn-primary" style={{ marginRight: 10, padding: '4px 12px', fontSize: '0.85rem' }} onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? 'Salvando...' : 'Salvar'}
               </button>
             )}
-            <button className={styles.closeBtn} onClick={onClose}>X</button>
+            <button className={styles.closeBtn} onClick={onClose}>×</button>
           </div>
         </header>
 
@@ -194,33 +102,17 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
             )}
 
             {isEditing ? (
-              <input
-                className="input-glass"
-                style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 20 }}
-                value={formData.title}
-                onChange={e => handleChange('title', e.target.value)}
-              />
+              <input className="input-glass" style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 20 }} value={formData.title} onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))} />
             ) : (
               <h1 className={styles.issueTitle}>{formData.title}</h1>
             )}
 
             <div className={styles.descriptionSection}>
-              <h3>Descricao</h3>
+              <h3>Descrição</h3>
               {isEditing ? (
-                <textarea
-                  className="input-glass"
-                  rows={6}
-                  value={formData.description}
-                  onChange={e => handleChange('description', e.target.value)}
-                />
+                <textarea className="input-glass" rows={6} value={formData.description} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} />
               ) : (
-                <div className={styles.descriptionText}>
-                  {formData.description ? (
-                    <span style={{ whiteSpace: 'pre-wrap' }}>{formData.description}</span>
-                  ) : (
-                    <span style={{ color: 'var(--text-dim)' }}>Sem detalhes ainda. Clique em Editar para descrever.</span>
-                  )}
-                </div>
+                <div className={styles.descriptionText}>{formData.description || <span style={{ color: 'var(--text-dim)' }}>Sem detalhes ainda.</span>}</div>
               )}
             </div>
 
@@ -248,41 +140,25 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
               <>
                 <div className={styles.sidebarField}>
                   <label>Status</label>
-                  <select
-                    className="input-glass"
-                    value={formData.workflow_status_id}
-                    onChange={e => handleChange('workflow_status_id', e.target.value)}
-                  >
-                    {statuses.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
+                  <select className="input-glass" value={formData.workflow_status_id} onChange={e => setFormData(prev => ({ ...prev, workflow_status_id: e.target.value }))}>
+                    {(statusesQuery.data || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div className={styles.sidebarField}>
                   <label>Prioridade</label>
-                  <select
-                    className="input-glass"
-                    value={formData.priority}
-                    onChange={e => handleChange('priority', e.target.value)}
-                  >
+                  <select className="input-glass" value={formData.priority} onChange={e => setFormData(prev => ({ ...prev, priority: e.target.value as Priority }))}>
                     <option value="LOW">Baixa</option>
-                    <option value="MEDIUM">Media</option>
+                    <option value="MEDIUM">Média</option>
                     <option value="HIGH">Alta</option>
-                    <option value="CRITICAL">Critica</option>
+                    <option value="CRITICAL">Crítica</option>
                   </select>
                 </div>
-                {potentialParents.length > 0 && (
+                {(parentCandidatesQuery.data || []).length > 0 && (
                   <div className={styles.sidebarField}>
                     <label>Pai (Epic/Story)</label>
-                    <select
-                      className="input-glass"
-                      value={formData.parent_id}
-                      onChange={e => handleChange('parent_id', e.target.value)}
-                    >
+                    <select className="input-glass" value={formData.parent_id} onChange={e => setFormData(prev => ({ ...prev, parent_id: e.target.value }))}>
                       <option value="">Nenhum (Desvincular)</option>
-                      {potentialParents.map(p => (
-                        <option key={p.id} value={p.id}>{p.project_key} - {p.title}</option>
-                      ))}
+                      {(parentCandidatesQuery.data || []).map(p => <option key={p.id} value={p.id}>{p.project_key} - {p.title}</option>)}
                     </select>
                   </div>
                 )}
@@ -290,38 +166,16 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
             ) : (
               <>
                 <div className={styles.sidebarField}>
-                  <label>Responsavel</label>
-                  <div className={styles.fieldValue}>
-                    {issue.assignee ? (
-                      <>
-                        <div className={styles.avatarMini}>{issue.assignee.name[0]}</div>
-                        <span>{issue.assignee.name}</span>
-                      </>
-                    ) : (
-                      <span>Nao atribuido</span>
-                    )}
-                  </div>
+                  <label>Responsável</label>
+                  <div className={styles.fieldValue}>{issue.assignee ? <><div className={styles.avatarMini}>{issue.assignee.name[0]}</div><span>{issue.assignee.name}</span></> : <span>Não atribuído</span>}</div>
                 </div>
                 <div className={styles.sidebarField}>
                   <label>Relator</label>
-                  <div className={styles.fieldValue}>
-                    {issue.reporter ? (
-                      <>
-                        <div className={styles.avatarMini}>{issue.reporter.name[0]}</div>
-                        <span>{issue.reporter.name}</span>
-                      </>
-                    ) : (
-                      <span>Sistema</span>
-                    )}
-                  </div>
+                  <div className={styles.fieldValue}>{issue.reporter ? <><div className={styles.avatarMini}>{issue.reporter.name[0]}</div><span>{issue.reporter.name}</span></> : <span>Sistema</span>}</div>
                 </div>
                 <div className={styles.sidebarField}>
                   <label>Prioridade</label>
-                  <div className={styles.fieldValue}>
-                    {formData.priority === 'CRITICAL' ? 'Critica' :
-                      formData.priority === 'HIGH' ? 'Alta' :
-                        formData.priority === 'MEDIUM' ? 'Media' : 'Baixa'}
-                  </div>
+                  <div className={styles.fieldValue}>{formData.priority}</div>
                 </div>
               </>
             )}
@@ -335,3 +189,4 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
     </div>
   );
 }
+

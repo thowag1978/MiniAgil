@@ -1,144 +1,129 @@
-'use client';
-import React, { useState, useEffect } from 'react';
+﻿'use client';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './modal.module.css';
+import { itemsApi, type CreateItemInput } from '@/lib/api/items';
+import { projectsApi } from '@/lib/api/projects';
+import { queryKeys } from '@/lib/query/keys';
+import type { Item, ItemType, Priority } from '@/lib/types';
 
 interface CreateItemModalProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
+interface FormData {
+  type: ItemType;
+  title: string;
+  description: string;
+  priority: Priority;
+  project_id: string;
+  workflow_status_id: string;
+  parent_id: string;
+}
+
 export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalProps) {
-  const [formData, setFormData] = useState({
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState<FormData>({
     type: 'TASK',
     title: '',
     description: '',
     priority: 'MEDIUM',
     project_id: '',
     workflow_status_id: '',
-    parent_id: ''
+    parent_id: '',
   });
-  
-  const [loading, setLoading] = useState(false);
-  const [initialDataLoading, setInitialDataLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [potentialParents, setPotentialParents] = useState<any[]>([]);
-  const [parentLoading, setParentLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const headers = { 'Authorization': `Bearer ${token}` };
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => projectsApi.list(),
+  });
 
-        // Fetch Projects
-        const projRes = await fetch('http://localhost:4000/api/projects', { headers });
-        let projectId = '';
-        if (projRes.ok) {
-          const projects = await projRes.json();
-          if (projects.length > 0) projectId = projects[0].id;
-        }
+  const statusesQuery = useQuery({
+    queryKey: queryKeys.itemStatuses,
+    queryFn: () => itemsApi.listStatuses(),
+  });
 
-        // Fetch Statuses
-        const statRes = await fetch('http://localhost:4000/api/items/statuses', { headers });
-        let statusId = '';
-        if (statRes.ok) {
-          const statuses = await statRes.json();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const startStatus = statuses.find((s: any) => s.name === 'A FAZER' || s.order === 0);
-          if (startStatus) statusId = startStatus.id;
-        }
+  const selectedProjectId = formData.project_id || projectsQuery.data?.[0]?.id || '';
+  const parentType = useMemo(() => {
+    if (formData.type === 'STORY') return 'EPIC';
+    if (formData.type === 'TASK' || formData.type === 'BUG') return 'STORY';
+    return null;
+  }, [formData.type]);
 
-        setFormData(prev => ({
-          ...prev,
-          project_id: projectId,
-          workflow_status_id: statusId
-        }));
-      } catch (err) {
-        console.error('Error fetching initial data', err);
-      } finally {
-        setInitialDataLoading(false);
+  const potentialParentsQuery = useQuery({
+    queryKey: queryKeys.itemsByFilter(`${selectedProjectId}:${parentType || 'none'}`),
+    queryFn: () => itemsApi.list({ project_id: selectedProjectId, type: parentType as ItemType }),
+    enabled: Boolean(selectedProjectId && parentType),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (payload: CreateItemInput) => itemsApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.items });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardMetrics });
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.backlogOverview(selectedProjectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalItems(selectedProjectId) });
       }
-    };
-    fetchData();
-  }, []);
+      onSuccess();
+    },
+    onError: (error: Error) => {
+      alert(`Erro ao criar: ${error.message}`);
+    },
+  });
 
-  // Fetch Potential Parents when type or project changes
-  useEffect(() => {
-    if (!formData.project_id) return;
-    
-    let fetchType = '';
-    if (formData.type === 'STORY') fetchType = 'EPIC';
-    else if (formData.type === 'TASK' || formData.type === 'BUG') fetchType = 'STORY';
-    
-    if (!fetchType) {
-      setPotentialParents([]);
-      setFormData(prev => ({ ...prev, parent_id: '' }));
-      return;
+  const initialDataLoading = projectsQuery.isLoading || statusesQuery.isLoading;
+
+  React.useEffect(() => {
+    if (!formData.project_id && projectsQuery.data?.[0]?.id) {
+      setFormData(prev => ({ ...prev, project_id: projectsQuery.data[0].id }));
     }
+  }, [projectsQuery.data, formData.project_id]);
 
-    const fetchParents = async () => {
-      setParentLoading(true);
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:4000/api/items?project_id=${formData.project_id}&type=${fetchType}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setPotentialParents(data);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setParentLoading(false);
-      }
-    };
-    fetchParents();
-  }, [formData.type, formData.project_id]);
+  React.useEffect(() => {
+    if (!formData.workflow_status_id && statusesQuery.data?.length) {
+      const startStatus = statusesQuery.data.find(s => s.name === 'A FAZER' || s.order === 0) || statusesQuery.data[0];
+      setFormData(prev => ({ ...prev, workflow_status_id: startStatus.id }));
+    }
+  }, [statusesQuery.data, formData.workflow_status_id]);
 
-  const handleChange = (field: string, value: string) => {
+  React.useEffect(() => {
+    if (!parentType) {
+      setFormData(prev => ({ ...prev, parent_id: '' }));
+    }
+  }, [parentType]);
+
+  const handleChange = <K extends keyof FormData>(field: K, value: FormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!formData.title.trim()) {
       alert('O título é obrigatório.');
       return;
     }
-    if (!formData.project_id) {
-      alert('Nenhum projeto associado à esta conta.');
+    if (!selectedProjectId || !formData.workflow_status_id) {
+      alert('Projeto e status são obrigatórios.');
       return;
     }
 
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      // Limpa parent_id vazio se necessário
-      const bodyPayload = { ...formData };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (!bodyPayload.parent_id) delete (bodyPayload as any).parent_id;
+    const payload: CreateItemInput = {
+      type: formData.type,
+      title: formData.title,
+      description: formData.description,
+      priority: formData.priority,
+      project_id: selectedProjectId,
+      workflow_status_id: formData.workflow_status_id,
+      parent_id: formData.parent_id || null,
+    };
 
-      const res = await fetch(`http://localhost:4000/api/items`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify(bodyPayload)
-      });
-      if (res.ok) {
-        onSuccess();
-      } else {
-        const errData = await res.json();
-        alert(`Erro ao criar: ${errData.error || 'Desconhecido'}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Erro de rede ao salvar');
-    } finally {
-      setLoading(false);
-    }
+    if (!payload.parent_id) delete payload.parent_id;
+
+    createMutation.mutate(payload);
   };
+
+  const potentialParents = (potentialParentsQuery.data || []) as Item[];
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -158,56 +143,56 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
               <div style={{ display: 'flex', gap: 15 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Tipo de Tarefa</label>
-                  <select 
-                    className="input-glass" 
+                  <select
+                    className="input-glass"
                     value={formData.type}
-                    onChange={e => handleChange('type', e.target.value)}
+                    onChange={e => handleChange('type', e.target.value as ItemType)}
                     style={{ width: '100%' }}
                   >
-                    <option value="EPIC">👑 Épico</option>
-                    <option value="STORY">📖 História de Usuário</option>
-                    <option value="TASK">✅ Tarefa</option>
-                    <option value="BUG">🐛 Bug</option>
+                    <option value="EPIC">Épico</option>
+                    <option value="STORY">História de Usuário</option>
+                    <option value="TASK">Tarefa</option>
+                    <option value="BUG">Bug</option>
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Prioridade</label>
-                  <select 
-                    className="input-glass" 
+                  <select
+                    className="input-glass"
                     value={formData.priority}
-                    onChange={e => handleChange('priority', e.target.value)}
+                    onChange={e => handleChange('priority', e.target.value as Priority)}
                     style={{ width: '100%' }}
                   >
-                    <option value="LOW">🔵 Baixa</option>
-                    <option value="MEDIUM">🟡 Média</option>
-                    <option value="HIGH">🔴 Alta</option>
-                    <option value="CRITICAL">🔥 Crítica</option>
+                    <option value="LOW">Baixa</option>
+                    <option value="MEDIUM">Média</option>
+                    <option value="HIGH">Alta</option>
+                    <option value="CRITICAL">Crítica</option>
                   </select>
                 </div>
               </div>
 
-              {potentialParents.length > 0 && (
-                 <div>
-                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-                      {formData.type === 'STORY' ? 'Épico Pai' : 'História Pai'} {parentLoading && '(Carregando...)'}
-                    </label>
-                    <select 
-                      className="input-glass" 
-                      value={formData.parent_id}
-                      onChange={e => handleChange('parent_id', e.target.value)}
-                      style={{ width: '100%' }}
-                    >
-                      <option value="">Nenhum (Item solto)</option>
-                      {potentialParents.map(p => (
-                        <option key={p.id} value={p.id}>{p.project_key} - {p.title}</option>
-                      ))}
-                    </select>
-                 </div>
+              {parentType && potentialParents.length > 0 && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
+                    {formData.type === 'STORY' ? 'Épico Pai' : 'História Pai'} {potentialParentsQuery.isLoading && '(Carregando...)'}
+                  </label>
+                  <select
+                    className="input-glass"
+                    value={formData.parent_id}
+                    onChange={e => handleChange('parent_id', e.target.value)}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="">Nenhum (Item solto)</option>
+                    {potentialParents.map(p => (
+                      <option key={p.id} value={p.id}>{p.project_key} - {p.title}</option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               <div>
                 <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Título</label>
-                <input 
+                <input
                   className="input-glass"
                   placeholder="Resumo do item..."
                   value={formData.title}
@@ -218,7 +203,7 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
 
               <div style={{ flex: 1 }}>
                 <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Descrição</label>
-                <textarea 
+                <textarea
                   className="input-glass"
                   placeholder="Adicione detalhes, critérios de aceite, passos para reproduzir..."
                   rows={6}
@@ -230,8 +215,8 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
                 <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-                <button className="btn-primary" onClick={handleSave} disabled={loading || !formData.project_id}>
-                  {loading ? 'Salvando...' : 'Criar Atividade'}
+                <button className="btn-primary" onClick={handleSave} disabled={createMutation.isPending || !selectedProjectId}>
+                  {createMutation.isPending ? 'Salvando...' : 'Criar Atividade'}
                 </button>
               </div>
             </>
@@ -241,3 +226,5 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
     </div>
   );
 }
+
+

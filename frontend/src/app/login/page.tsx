@@ -1,9 +1,14 @@
-'use client';
+﻿'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import styles from './login.module.css';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { ApiError } from '@/lib/api/client';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('admin@miniagil.com');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
@@ -15,28 +20,14 @@ export default function LoginPage() {
     setErrorMsg('');
 
     try {
-      // Faz a chamada diretamente para o nosso backend Node na porta 4000
-      const res = await fetch('http://localhost:4000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        // Salva o token localmente e redireciona (abordagem MVP)
-        localStorage.setItem('token', data.token);
-        if (data.user && data.user.name) {
-          localStorage.setItem('userName', data.user.name);
-        }
-        // O Next.js router do app nativo
-        window.location.href = '/dashboard';
+      await login({ email, password });
+      router.replace('/dashboard');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrorMsg(error.message || 'Credenciais invÃ¡lidas!');
       } else {
-        const err = await res.json();
-        setErrorMsg(err.error || 'Credenciais inválidas!');
+        setErrorMsg('Falha de conexÃ£o com o servidor. O backend estÃ¡ rodando?');
       }
-    } catch {
-      setErrorMsg('Falha de conexão com o servidor. O backend está rodando?');
     } finally {
       setLoading(false);
     }
@@ -46,39 +37,39 @@ export default function LoginPage() {
     <div className={styles.container}>
       <div className={styles.blob1}></div>
       <div className={styles.blob2}></div>
-      
+
       <main className={`card-glass animate-fade-in ${styles.loginCard}`}>
         <div className={styles.header}>
           <div className={styles.logo}></div>
           <h1>Bem-vindo ao MiniAgil</h1>
-          <p>O ágil que você conhece, no design que você merece.</p>
+          <p>O Ã¡gil que vocÃª conhece, no design que vocÃª merece.</p>
         </div>
-        
+
         <form className={styles.form} onSubmit={handleSubmit}>
-          {errorMsg && <div style={{color: '#ff6b6b', fontSize: '0.85rem', textAlign: 'center', background: 'rgba(255,0,0,0.1)', padding: 8, borderRadius: 6}}>{errorMsg}</div>}
-          
+          {errorMsg && <div style={{ color: '#ff6b6b', fontSize: '0.85rem', textAlign: 'center', background: 'rgba(255,0,0,0.1)', padding: 8, borderRadius: 6 }}>{errorMsg}</div>}
+
           <div className={styles.formGroup}>
             <label htmlFor="email">Email de trabalho</label>
-            <input 
-              type="email" 
-              id="email" 
+            <input
+              type="email"
+              id="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="input-glass" 
-              placeholder="nome@empresa.com" 
+              className="input-glass"
+              placeholder="nome@empresa.com"
               required
             />
           </div>
-          
+
           <div className={styles.formGroup}>
             <label htmlFor="password">Senha</label>
-            <input 
-              type="password" 
-              id="password" 
+            <input
+              type="password"
+              id="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="input-glass" 
-              placeholder="••••••••" 
+              className="input-glass"
+              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
               required
             />
           </div>
@@ -92,11 +83,13 @@ export default function LoginPage() {
             {loading ? 'Acessando...' : 'Entrar no Workspace'}
           </button>
         </form>
-        
+
         <div className={styles.footerInfo}>
-          Não tem uma conta? <Link href="/register">Crie agora</Link>
+          NÃ£o tem uma conta? <Link href="/register">Crie agora</Link>
         </div>
       </main>
     </div>
   );
 }
+
+

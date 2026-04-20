@@ -3,6 +3,14 @@ import { ItemType, Prisma } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
 
 export class ItemsController {
+  private normalizeStatusName(statusName?: string | null): string {
+    return (statusName || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim();
+  }
+
   async create(req: any, res: Response) {
     const {
       type,
@@ -182,6 +190,99 @@ export class ItemsController {
   async listStatuses(req: Request, res: Response) {
     const statuses = await prisma.workflowStatus.findMany({ orderBy: { order: 'asc' } });
     res.json(statuses);
+  }
+
+  async dashboardMetrics(req: any, res: Response) {
+    const myItems = await prisma.item.findMany({
+      where: {
+        project: { members: { some: { user_id: req.user.id } } },
+        OR: [{ assignee_id: req.user.id }, { reporter_id: req.user.id }],
+      },
+      include: {
+        workflow_status: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
+    });
+
+    const counts = {
+      pending: 0,
+      inProgress: 0,
+      review: 0,
+      done: 0,
+    };
+
+    for (const item of myItems) {
+      const normalized = this.normalizeStatusName(item.workflow_status?.name);
+      if (normalized === 'CONCLUIDO') {
+        counts.done += 1;
+      } else if (normalized === 'EM PROGRESSO') {
+        counts.inProgress += 1;
+      } else if (normalized === 'PARA REVISAO') {
+        counts.review += 1;
+      } else {
+        counts.pending += 1;
+      }
+    }
+
+    res.json({
+      counts,
+      recentItems: myItems,
+    });
+  }
+
+  async backlogOverview(req: any, res: Response) {
+    const { project_id } = req.query;
+    if (!project_id) {
+      return res.status(400).json({ error: 'project_id is required' });
+    }
+
+    const project = await prisma.project.findFirst({
+      where: { id: String(project_id), members: { some: { user_id: req.user.id } } },
+      select: { id: true, name: true, key_prefix: true },
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    const activeSprint = await prisma.sprint.findFirst({
+      where: { project_id: project.id, status: 'ACTIVE' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const sprintItemsWhere: { project_id: string; sprint_id?: string } = {
+      project_id: project.id,
+    };
+    if (activeSprint?.id) {
+      sprintItemsWhere.sprint_id = activeSprint.id;
+    }
+
+    const sprintItems = await prisma.item.findMany({
+      where: sprintItemsWhere,
+      include: {
+        workflow_status: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const backlogItems = await prisma.item.findMany({
+      where: {
+        project_id: project.id,
+        sprint_id: null,
+      },
+      include: {
+        workflow_status: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({
+      project,
+      activeSprint,
+      sprintItems,
+      backlogItems,
+    });
   }
 
   async listHierarchical(req: any, res: Response) {

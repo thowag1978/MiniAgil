@@ -9,6 +9,8 @@ itemRoutes.use(authenticate);
 
 itemRoutes.post('/', itemsController.create);
 itemRoutes.get('/', itemsController.list);
+itemRoutes.get('/dashboard-metrics', itemsController.dashboardMetrics);
+itemRoutes.get('/backlog-overview', itemsController.backlogOverview);
 itemRoutes.get('/hierarchical', itemsController.listHierarchical);
 itemRoutes.get('/statuses', itemsController.listStatuses);
 itemRoutes.patch('/:id', itemsController.updateField);

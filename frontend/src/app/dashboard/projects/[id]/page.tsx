@@ -1,120 +1,63 @@
-'use client';
-import React, { useEffect, useMemo, useState } from 'react';
+﻿'use client';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import styles from './detail.module.css';
-
-interface Project {
-  id: string;
-  name: string;
-  key_prefix: string;
-  description?: string | null;
-}
-
-interface Epic {
-  id: string;
-  project_key: string;
-  title: string;
-  workflow_status?: {
-    name?: string;
-  } | null;
-  children?: Array<{ id: string }>;
-}
+import { projectsApi } from '@/lib/api/projects';
+import { itemsApi } from '@/lib/api/items';
+import { queryKeys } from '@/lib/query/keys';
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const projectId = params?.id;
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [epics, setEpics] = useState<Epic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project(projectId || 'none'),
+    queryFn: () => projectsApi.getById(projectId),
+    enabled: Boolean(projectId),
+  });
 
-  useEffect(() => {
-    if (!projectId) return;
-
-    const fetchProjectData = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const token = localStorage.getItem('token');
-        const headers = { Authorization: `Bearer ${token}` };
-
-        const [projectRes, epicsRes] = await Promise.all([
-          fetch(`http://localhost:4000/api/projects/${projectId}`, { headers }),
-          fetch(`http://localhost:4000/api/items/hierarchical?project_id=${projectId}`, { headers }),
-        ]);
-
-        if (!projectRes.ok) {
-          throw new Error('Falha ao carregar detalhes do projeto');
-        }
-
-        const projectData: Project = await projectRes.json();
-        setProject(projectData);
-
-        if (epicsRes.ok) {
-          const epicData: Epic[] = await epicsRes.json();
-          setEpics(epicData);
-        } else {
-          setEpics([]);
-        }
-      } catch (err) {
-        console.error(err);
-        setError('Nao foi possivel carregar os dados do projeto.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProjectData();
-  }, [projectId]);
+  const epicsQuery = useQuery({
+    queryKey: queryKeys.hierarchicalItems(projectId || 'none'),
+    queryFn: () => itemsApi.listHierarchical(projectId),
+    enabled: Boolean(projectId),
+  });
 
   const normalizedEpics = useMemo(() => {
+    const epics = epicsQuery.data || [];
     return epics.map(epic => {
       const status = epic.workflow_status?.name || 'A FAZER';
-      const statusCls = status === 'CONCLUIDO' || status === 'CONCLUÍDO'
-        ? 'done'
-        : status === 'EM PROGRESSO'
-          ? 'prog'
-          : 'todo';
-
-      return {
-        ...epic,
-        status,
-        statusCls,
-        linkedCount: epic.children?.length || 0,
-      };
+      const statusCls = status === 'CONCLUIDO' || status === 'CONCLUÍDO' ? 'done' : status === 'EM PROGRESSO' ? 'prog' : 'todo';
+      return { ...epic, status, statusCls, linkedCount: epic.children?.length || 0 };
     });
-  }, [epics]);
+  }, [epicsQuery.data]);
 
-  if (loading) return <div>Carregando visao de projeto...</div>;
-  if (error) return <div>{error}</div>;
-  if (!project) return <div>Projeto nao encontrado.</div>;
+  if (projectQuery.isLoading || epicsQuery.isLoading) return <div>Carregando visão de projeto...</div>;
+  if (projectQuery.isError || epicsQuery.isError) return <div>Não foi possível carregar os dados do projeto.</div>;
+  if (!projectQuery.data) return <div>Projeto não encontrado.</div>;
 
   return (
     <div className={`animate-fade-in ${styles.container}`}>
       <div className={styles.header}>
         <div className={styles.breadcrumb}>
-          <Link href="/dashboard/projects">Projetos</Link> &gt; <span>{project.key_prefix}</span>
+          <Link href="/dashboard/projects">Projetos</Link> &gt; <span>{projectQuery.data.key_prefix}</span>
         </div>
         <div className={styles.titleRow}>
-          <h1>{project.name}</h1>
-          <span className={styles.keyBadge}>{project.key_prefix}</span>
+          <h1>{projectQuery.data.name}</h1>
+          <span className={styles.keyBadge}>{projectQuery.data.key_prefix}</span>
         </div>
-        <div className={styles.desc}>
-          {project.description || 'Sem descricao cadastrada.'}
-        </div>
+        <div className={styles.desc}>{projectQuery.data.description || 'Sem descrição cadastrada.'}</div>
       </div>
 
       <div className={styles.epicsSection}>
         <div className={styles.sectionHeader}>
-          <h2>Epicos Deste Projeto</h2>
+          <h2>Épicos Deste Projeto</h2>
         </div>
 
         <div className={styles.epicList}>
           {normalizedEpics.length === 0 ? (
-            <div>Nenhum epico encontrado para este projeto.</div>
+            <div>Nenhum épico encontrado para este projeto.</div>
           ) : (
             normalizedEpics.map(epic => (
               <div key={epic.id} className={styles.epicCard}>
@@ -126,7 +69,7 @@ export default function ProjectDetailPage() {
                 <div className={styles.epicRight}>
                   <div className={styles.epicMeta}>
                     <span className={`${styles.status} ${styles[epic.statusCls]}`}>{epic.status}</span>
-                    <span className={styles.storiesCount}>{epic.linkedCount} historias/tarefas vinculadas</span>
+                    <span className={styles.storiesCount}>{epic.linkedCount} histórias/tarefas vinculadas</span>
                   </div>
                 </div>
               </div>
@@ -137,3 +80,5 @@ export default function ProjectDetailPage() {
     </div>
   );
 }
+
+

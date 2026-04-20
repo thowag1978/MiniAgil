@@ -1,7 +1,9 @@
-'use client';
+﻿'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import styles from '../login/login.module.css';
+import { authApi } from '@/lib/api/auth';
+import { ApiError } from '@/lib/api/client';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -15,20 +17,14 @@ export default function ForgotPasswordPage() {
     setErrorMsg('');
 
     try {
-      const res = await fetch('http://localhost:4000/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-
-      if (res.ok) {
-        setSuccess(true);
+      await authApi.forgotPassword(email);
+      setSuccess(true);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrorMsg(error.message || 'Ocorreu um erro.');
       } else {
-        const err = await res.json();
-        setErrorMsg(err.error || 'Ocorreu um erro.');
+        setErrorMsg('Falha de conexão com o servidor.');
       }
-    } catch {
-      setErrorMsg('Falha de conexão com o servidor.');
     } finally {
       setLoading(false);
     }
@@ -38,14 +34,14 @@ export default function ForgotPasswordPage() {
     <div className={styles.container}>
       <div className={styles.blob1}></div>
       <div className={styles.blob2}></div>
-      
+
       <main className={`card-glass animate-fade-in ${styles.loginCard}`}>
         <div className={styles.header}>
           <div className={styles.logo}></div>
           <h1>Recuperar Senha</h1>
           <p>Informe seu e-mail para enviarmos um link de recuperação.</p>
         </div>
-        
+
         {success ? (
           <div style={{ textAlign: 'center', margin: '20px 0' }}>
             <p style={{ color: 'var(--brand)', fontWeight: 'bold' }}>Solicitação enviada!</p>
@@ -54,17 +50,17 @@ export default function ForgotPasswordPage() {
           </div>
         ) : (
           <form className={styles.form} onSubmit={handleSubmit}>
-            {errorMsg && <div style={{color: '#ff6b6b', fontSize: '0.85rem', textAlign: 'center', background: 'rgba(255,0,0,0.1)', padding: 8, borderRadius: 6}}>{errorMsg}</div>}
-            
+            {errorMsg && <div style={{ color: '#ff6b6b', fontSize: '0.85rem', textAlign: 'center', background: 'rgba(255,0,0,0.1)', padding: 8, borderRadius: 6 }}>{errorMsg}</div>}
+
             <div className={styles.formGroup}>
               <label htmlFor="email">Email da sua conta</label>
-              <input 
-                type="email" 
-                id="email" 
+              <input
+                type="email"
+                id="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="input-glass" 
-                placeholder="nome@empresa.com" 
+                className="input-glass"
+                placeholder="nome@empresa.com"
                 required
               />
             </div>
@@ -74,7 +70,7 @@ export default function ForgotPasswordPage() {
             </button>
           </form>
         )}
-        
+
         {!success && (
           <div className={styles.footerInfo}>
             Lembrou a senha? <Link href="/login">Voltar ao Login</Link>
@@ -84,3 +80,5 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+
+

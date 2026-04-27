@@ -1,237 +1,449 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './modal.module.css';
+import { itemsApi, type CreateItemInput } from '@/lib/api/items';
+import { projectsApi } from '@/lib/api/projects';
+import { queryKeys } from '@/lib/query/keys';
+import type { Item, ItemType, Priority } from '@/lib/types';
 
 interface CreateItemModalProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
+interface ItemFormData {
+  type: ItemType;
+  title: string;
+  description: string;
+  priority: Priority;
+  project_id: string;
+  workflow_status_id: string;
+  parent_id: string;
+}
+
+interface ProjectFormData {
+  id: string;
+  name: string;
+  key_prefix: string;
+  description: string;
+}
+
 export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalProps) {
-  const [formData, setFormData] = useState({
+  const queryClient = useQueryClient();
+  const [entityType, setEntityType] = useState<'ITEM' | 'PROJECT'>('ITEM');
+  const [projectMode, setProjectMode] = useState<'CREATE' | 'EDIT'>('CREATE');
+
+  const [itemForm, setItemForm] = useState<ItemFormData>({
     type: 'TASK',
     title: '',
     description: '',
     priority: 'MEDIUM',
     project_id: '',
     workflow_status_id: '',
-    parent_id: ''
+    parent_id: '',
   });
-  
-  const [loading, setLoading] = useState(false);
-  const [initialDataLoading, setInitialDataLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [potentialParents, setPotentialParents] = useState<any[]>([]);
-  const [parentLoading, setParentLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const headers = { 'Authorization': `Bearer ${token}` };
+  const [projectForm, setProjectForm] = useState<ProjectFormData>({
+    id: '',
+    name: '',
+    key_prefix: '',
+    description: '',
+  });
 
-        // Fetch Projects
-        const projRes = await fetch('http://localhost:4000/api/projects', { headers });
-        let projectId = '';
-        if (projRes.ok) {
-          const projects = await projRes.json();
-          if (projects.length > 0) projectId = projects[0].id;
-        }
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => projectsApi.list(),
+  });
 
-        // Fetch Statuses
-        const statRes = await fetch('http://localhost:4000/api/items/statuses', { headers });
-        let statusId = '';
-        if (statRes.ok) {
-          const statuses = await statRes.json();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const startStatus = statuses.find((s: any) => s.name === 'A FAZER' || s.order === 0);
-          if (startStatus) statusId = startStatus.id;
-        }
+  const statusesQuery = useQuery({
+    queryKey: queryKeys.itemStatuses,
+    queryFn: () => itemsApi.listStatuses(),
+    enabled: entityType === 'ITEM',
+  });
 
-        setFormData(prev => ({
-          ...prev,
-          project_id: projectId,
-          workflow_status_id: statusId
-        }));
-      } catch (err) {
-        console.error('Error fetching initial data', err);
-      } finally {
-        setInitialDataLoading(false);
+  const selectedProjectId = itemForm.project_id || projectsQuery.data?.[0]?.id || '';
+  const parentType = useMemo(() => {
+    if (itemForm.type === 'STORY') return 'EPIC';
+    if (itemForm.type === 'TASK' || itemForm.type === 'BUG') return 'STORY';
+    return null;
+  }, [itemForm.type]);
+
+  const potentialParentsQuery = useQuery({
+    queryKey: queryKeys.itemsByFilter(`${selectedProjectId}:${parentType || 'none'}`),
+    queryFn: () => itemsApi.list({ project_id: selectedProjectId, type: parentType as ItemType }),
+    enabled: entityType === 'ITEM' && Boolean(selectedProjectId && parentType),
+  });
+
+  const createItemMutation = useMutation({
+    mutationFn: (payload: CreateItemInput) => itemsApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.items });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardMetrics });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalTree });
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.backlogOverview(selectedProjectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalItems(selectedProjectId) });
       }
-    };
-    fetchData();
-  }, []);
+      onSuccess();
+    },
+    onError: (error: Error) => {
+      alert(`Erro ao criar item: ${error.message}`);
+    },
+  });
 
-  // Fetch Potential Parents when type or project changes
-  useEffect(() => {
-    if (!formData.project_id) return;
-    
-    let fetchType = '';
-    if (formData.type === 'STORY') fetchType = 'EPIC';
-    else if (formData.type === 'TASK' || formData.type === 'BUG') fetchType = 'STORY';
-    
-    if (!fetchType) {
-      setPotentialParents([]);
-      setFormData(prev => ({ ...prev, parent_id: '' }));
-      return;
+  const createProjectMutation = useMutation({
+    mutationFn: (payload: { name: string; key_prefix: string; description?: string }) => projectsApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardMetrics });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalTree });
+      onSuccess();
+    },
+    onError: (error: Error) => {
+      alert(`Erro ao criar projeto: ${error.message}`);
+    },
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: (payload: { id: string; name: string; key_prefix: string; description?: string }) =>
+      projectsApi.update(payload.id, {
+        name: payload.name,
+        key_prefix: payload.key_prefix,
+        description: payload.description,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardMetrics });
+      queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalTree });
+      onSuccess();
+    },
+    onError: (error: Error) => {
+      alert(`Erro ao editar projeto: ${error.message}`);
+    },
+  });
+
+  React.useEffect(() => {
+    if (!itemForm.project_id && projectsQuery.data?.[0]?.id) {
+      setItemForm((prev) => ({ ...prev, project_id: projectsQuery.data![0].id }));
     }
+  }, [projectsQuery.data, itemForm.project_id]);
 
-    const fetchParents = async () => {
-      setParentLoading(true);
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:4000/api/items?project_id=${formData.project_id}&type=${fetchType}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+  React.useEffect(() => {
+    if (!itemForm.workflow_status_id && statusesQuery.data?.length) {
+      const startStatus = statusesQuery.data.find((s) => s.name === 'A FAZER' || s.order === 0) || statusesQuery.data[0];
+      setItemForm((prev) => ({ ...prev, workflow_status_id: startStatus.id }));
+    }
+  }, [statusesQuery.data, itemForm.workflow_status_id]);
+
+  React.useEffect(() => {
+    if (!parentType) {
+      setItemForm((prev) => ({ ...prev, parent_id: '' }));
+    }
+  }, [parentType]);
+
+  React.useEffect(() => {
+    if (projectMode === 'EDIT' && projectForm.id && projectsQuery.data) {
+      const selected = projectsQuery.data.find((p) => p.id === projectForm.id);
+      if (selected) {
+        setProjectForm({
+          id: selected.id,
+          name: selected.name,
+          key_prefix: selected.key_prefix,
+          description: selected.description || '',
         });
-        if (res.ok) {
-          const data = await res.json();
-          setPotentialParents(data);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setParentLoading(false);
       }
-    };
-    fetchParents();
-  }, [formData.type, formData.project_id]);
+    }
+  }, [projectMode, projectForm.id, projectsQuery.data]);
 
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSave = async () => {
-    if (!formData.title.trim()) {
+  const handleItemSave = () => {
+    if (!itemForm.title.trim()) {
       alert('O título é obrigatório.');
       return;
     }
-    if (!formData.project_id) {
-      alert('Nenhum projeto associado à esta conta.');
+    if (!selectedProjectId || !itemForm.workflow_status_id) {
+      alert('Projeto e status são obrigatórios.');
       return;
     }
 
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      // Limpa parent_id vazio se necessário
-      const bodyPayload = { ...formData };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (!bodyPayload.parent_id) delete (bodyPayload as any).parent_id;
+    const payload: CreateItemInput = {
+      type: itemForm.type,
+      title: itemForm.title,
+      description: itemForm.description,
+      priority: itemForm.priority,
+      project_id: selectedProjectId,
+      workflow_status_id: itemForm.workflow_status_id,
+      parent_id: itemForm.parent_id || null,
+    };
 
-      const res = await fetch(`http://localhost:4000/api/items`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify(bodyPayload)
-      });
-      if (res.ok) {
-        onSuccess();
-      } else {
-        const errData = await res.json();
-        alert(`Erro ao criar: ${errData.error || 'Desconhecido'}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Erro de rede ao salvar');
-    } finally {
-      setLoading(false);
-    }
+    if (!payload.parent_id) delete payload.parent_id;
+    createItemMutation.mutate(payload);
   };
+
+  const handleProjectSave = () => {
+    if (!projectForm.name.trim() || !projectForm.key_prefix.trim()) {
+      alert('Nome e chave do projeto são obrigatórios.');
+      return;
+    }
+
+    const payload = {
+      name: projectForm.name.trim(),
+      key_prefix: projectForm.key_prefix.toUpperCase().trim(),
+      description: projectForm.description.trim() || undefined,
+    };
+
+    if (projectMode === 'CREATE') {
+      createProjectMutation.mutate(payload);
+      return;
+    }
+
+    if (!projectForm.id) {
+      alert('Selecione um projeto para editar.');
+      return;
+    }
+    updateProjectMutation.mutate({ id: projectForm.id, ...payload });
+  };
+
+  const isItemLoading = entityType === 'ITEM' && (projectsQuery.isLoading || statusesQuery.isLoading);
+  const projectActionPending = createProjectMutation.isPending || updateProjectMutation.isPending;
+  const potentialParents = (potentialParentsQuery.data || []) as Item[];
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+      <div className={styles.modal} style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
         <header className={styles.modalHeader}>
           <div className={styles.headerLeft}>
-            <span style={{ fontSize: '1.2rem', fontWeight: 600 }}>Criar Nova Atividade</span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 600 }}>Novo Item</span>
           </div>
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </header>
 
-        <div className={styles.modalBody} style={{ flexDirection: 'column', gap: 20 }}>
-          {initialDataLoading ? (
-            <div style={{ color: 'var(--text-dim)' }}>Carregando configuração...</div>
-          ) : (
-            <>
-              <div style={{ display: 'flex', gap: 15 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Tipo de Tarefa</label>
-                  <select 
-                    className="input-glass" 
-                    value={formData.type}
-                    onChange={e => handleChange('type', e.target.value)}
-                    style={{ width: '100%' }}
-                  >
-                    <option value="EPIC">👑 Épico</option>
-                    <option value="STORY">📖 História de Usuário</option>
-                    <option value="TASK">✅ Tarefa</option>
-                    <option value="BUG">🐛 Bug</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Prioridade</label>
-                  <select 
-                    className="input-glass" 
-                    value={formData.priority}
-                    onChange={e => handleChange('priority', e.target.value)}
-                    style={{ width: '100%' }}
-                  >
-                    <option value="LOW">🔵 Baixa</option>
-                    <option value="MEDIUM">🟡 Média</option>
-                    <option value="HIGH">🔴 Alta</option>
-                    <option value="CRITICAL">🔥 Crítica</option>
-                  </select>
-                </div>
-              </div>
+        <div className={styles.modalBody} style={{ flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className={entityType === 'ITEM' ? 'btn-primary' : 'btn-secondary'}
+              onClick={() => setEntityType('ITEM')}
+              type="button"
+            >
+              Item
+            </button>
+            <button
+              className={entityType === 'PROJECT' ? 'btn-primary' : 'btn-secondary'}
+              onClick={() => setEntityType('PROJECT')}
+              type="button"
+            >
+              Projeto
+            </button>
+          </div>
 
-              {potentialParents.length > 0 && (
-                 <div>
-                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-                      {formData.type === 'STORY' ? 'Épico Pai' : 'História Pai'} {parentLoading && '(Carregando...)'}
-                    </label>
-                    <select 
-                      className="input-glass" 
-                      value={formData.parent_id}
-                      onChange={e => handleChange('parent_id', e.target.value)}
+          {entityType === 'ITEM' ? (
+            isItemLoading ? (
+              <div style={{ color: 'var(--text-dim)' }}>Carregando configuração...</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Tipo</label>
+                    <select
+                      className="input-glass"
+                      value={itemForm.type}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, type: e.target.value as ItemType }))}
                       style={{ width: '100%' }}
                     >
-                      <option value="">Nenhum (Item solto)</option>
-                      {potentialParents.map(p => (
+                      <option value="EPIC">Épico</option>
+                      <option value="STORY">História de Usuário</option>
+                      <option value="TASK">Tarefa</option>
+                      <option value="BUG">Bug</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Projeto</label>
+                    <select
+                      className="input-glass"
+                      value={itemForm.project_id}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, project_id: e.target.value, parent_id: '' }))}
+                      style={{ width: '100%' }}
+                    >
+                      {(projectsQuery.data || []).map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.key_prefix} - {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Prioridade</label>
+                    <select
+                      className="input-glass"
+                      value={itemForm.priority}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, priority: e.target.value as Priority }))}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="LOW">Baixa</option>
+                      <option value="MEDIUM">Média</option>
+                      <option value="HIGH">Alta</option>
+                      <option value="CRITICAL">Crítica</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Status Inicial</label>
+                    <select
+                      className="input-glass"
+                      value={itemForm.workflow_status_id}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, workflow_status_id: e.target.value }))}
+                      style={{ width: '100%' }}
+                    >
+                      {(statusesQuery.data || []).map((status) => (
+                        <option key={status.id} value={status.id}>{status.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {parentType && potentialParents.length > 0 && (
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
+                      {itemForm.type === 'STORY' ? 'Épico Pai' : 'História Pai'}
+                    </label>
+                    <select
+                      className="input-glass"
+                      value={itemForm.parent_id}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, parent_id: e.target.value }))}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Nenhum (item solto)</option>
+                      {potentialParents.map((p) => (
                         <option key={p.id} value={p.id}>{p.project_key} - {p.title}</option>
                       ))}
                     </select>
-                 </div>
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Título</label>
+                  <input
+                    className="input-glass"
+                    value={itemForm.title}
+                    onChange={(e) => setItemForm((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder="Resumo do item..."
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Descrição</label>
+                  <textarea
+                    className="input-glass"
+                    rows={5}
+                    value={itemForm.description}
+                    onChange={(e) => setItemForm((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Detalhes do item..."
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                  <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+                  <button className="btn-primary" onClick={handleItemSave} disabled={createItemMutation.isPending || !selectedProjectId}>
+                    {createItemMutation.isPending ? 'Salvando...' : 'Criar Item'}
+                  </button>
+                </div>
+              </>
+            )
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className={projectMode === 'CREATE' ? 'btn-primary' : 'btn-secondary'}
+                  type="button"
+                  onClick={() => {
+                    setProjectMode('CREATE');
+                    setProjectForm({ id: '', name: '', key_prefix: '', description: '' });
+                  }}
+                >
+                  Criar Projeto
+                </button>
+                <button
+                  className={projectMode === 'EDIT' ? 'btn-primary' : 'btn-secondary'}
+                  type="button"
+                  onClick={() => {
+                    setProjectMode('EDIT');
+                    const first = projectsQuery.data?.[0];
+                    setProjectForm({
+                      id: first?.id || '',
+                      name: first?.name || '',
+                      key_prefix: first?.key_prefix || '',
+                      description: first?.description || '',
+                    });
+                  }}
+                >
+                  Editar Projeto
+                </button>
+              </div>
+
+              {projectMode === 'EDIT' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Projeto</label>
+                  <select
+                    className="input-glass"
+                    value={projectForm.id}
+                    onChange={(e) => setProjectForm((prev) => ({ ...prev, id: e.target.value }))}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="">Selecione um projeto</option>
+                    {(projectsQuery.data || []).map((project) => (
+                      <option key={project.id} value={project.id}>{project.key_prefix} - {project.name}</option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               <div>
-                <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Título</label>
-                <input 
+                <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Nome do Projeto</label>
+                <input
                   className="input-glass"
-                  placeholder="Resumo do item..."
-                  value={formData.title}
-                  onChange={e => handleChange('title', e.target.value)}
-                  style={{ width: '100%', fontSize: '1.1rem', padding: '10px 15px' }}
+                  value={projectForm.name}
+                  onChange={(e) => setProjectForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Ex: Plataforma Mobile"
+                  style={{ width: '100%' }}
                 />
               </div>
 
-              <div style={{ flex: 1 }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Chave do Projeto</label>
+                <input
+                  className="input-glass"
+                  value={projectForm.key_prefix}
+                  onChange={(e) => setProjectForm((prev) => ({ ...prev, key_prefix: e.target.value.toUpperCase() }))}
+                  maxLength={10}
+                  placeholder="Ex: MOB"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
                 <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Descrição</label>
-                <textarea 
+                <textarea
                   className="input-glass"
-                  placeholder="Adicione detalhes, critérios de aceite, passos para reproduzir..."
-                  rows={6}
-                  value={formData.description}
-                  onChange={e => handleChange('description', e.target.value)}
-                  style={{ width: '100%', padding: '10px 15px' }}
+                  rows={5}
+                  value={projectForm.description}
+                  onChange={(e) => setProjectForm((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descrição do projeto..."
+                  style={{ width: '100%' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-                <button className="btn-primary" onClick={handleSave} disabled={loading || !formData.project_id}>
-                  {loading ? 'Salvando...' : 'Criar Atividade'}
+                <button
+                  className="btn-primary"
+                  onClick={handleProjectSave}
+                  disabled={projectActionPending || (projectMode === 'EDIT' && !projectForm.id)}
+                >
+                  {projectActionPending ? 'Salvando...' : projectMode === 'CREATE' ? 'Criar Projeto' : 'Salvar Projeto'}
                 </button>
               </div>
             </>

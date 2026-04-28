@@ -7,17 +7,18 @@ interface HierarchicalItemModalProps {
   onSuccess: () => void;
   mode: 'CREATE' | 'EDIT';
   type: 'EPIC' | 'STORY' | 'TASK';
-  parentData?: { id: string; title: string; project_key: string };
+  parentData?: { id: string; title: string; project_key: string; project_id?: string };
+  projectId?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialData?: any;
 }
 
-export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, parentData, initialData }: HierarchicalItemModalProps) {
+export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, parentData, projectId, initialData }: HierarchicalItemModalProps) {
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
     priority: initialData?.priority || 'MEDIUM',
-    project_id: initialData?.project_id || '',
+    project_id: initialData?.project_id || parentData?.project_id || projectId || '',
     workflow_status_id: initialData?.workflow_status_id || '',
     assignee_id: initialData?.assignee_id || '',
     parent_id: initialData?.parent_id || parentData?.id || '',
@@ -56,15 +57,15 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
         if (mode === 'CREATE') {
           // Fetch Projects
           const projRes = await fetch('http://localhost:4000/api/projects', { headers });
-          let projectId = '';
+          let defaultProjectId = parentData?.project_id || projectId || '';
           if (projRes.ok) {
             const projects = await projRes.json();
-            if (projects.length > 0) projectId = projects[0].id;
+            if (!defaultProjectId && projects.length > 0) defaultProjectId = projects[0].id;
           }
 
           setFormData(prev => ({
             ...prev,
-            project_id: projectId,
+            project_id: defaultProjectId,
             workflow_status_id: statusId
           }));
         }
@@ -75,7 +76,7 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
       }
     };
     fetchData();
-  }, [mode]);
+  }, [mode, parentData?.project_id, projectId]);
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));

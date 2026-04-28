@@ -6,6 +6,8 @@ import HierarchicalItemModal from '../../../components/HierarchicalItemModal';
 export default function HierarchicalBacklog() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [items, setItems] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [projects, setProjects] = useState<any[]>([]);
   const [projectId, setProjectId] = useState('');
   const [loading, setLoading] = useState(true);
   
@@ -22,6 +24,7 @@ export default function HierarchicalBacklog() {
     parentData?: any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     initialData?: any;
+    projectId?: string;
   }>({ isOpen: false, mode: 'CREATE', type: 'EPIC' });
 
   const fetchData = async () => {
@@ -30,22 +33,30 @@ export default function HierarchicalBacklog() {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      // 1. Get Project ID
+      // 1. Get Projects
       const projRes = await fetch('http://localhost:4000/api/projects', { headers });
       if (!projRes.ok) throw new Error('Failed to fetch project');
       const projects = await projRes.json();
+      setProjects(projects);
       if (projects.length === 0) {
+        setItems([]);
+        setProjectId('');
         setLoading(false);
         return;
       }
       const pId = projects[0].id;
       setProjectId(pId);
 
-      // 2. Get Hierarchical Items
-      const itemsRes = await fetch(`http://localhost:4000/api/items/hierarchical?project_id=${pId}`, { headers });
+      // 2. Get all backlog items for all user projects
+      const itemsRes = await fetch('http://localhost:4000/api/items', { headers });
       if (itemsRes.ok) {
         const data = await itemsRes.json();
         setItems(data);
+        const expandedIds = new Set<string>(projects.map((project: any) => project.id));
+        data.forEach((item: any) => {
+          if (item.type === 'EPIC' || item.type === 'STORY') expandedIds.add(item.id);
+        });
+        setExpanded(expandedIds);
       }
     } catch (err) {
       console.error(err);
@@ -94,7 +105,8 @@ export default function HierarchicalBacklog() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filterItem = (item: any): boolean => {
-    const matchSearch = item.title.toLowerCase().includes(search.toLowerCase()) || item.project_key.toLowerCase().includes(search.toLowerCase());
+    const searchText = `${item.title} ${item.project_key} ${item.project?.name || ''} ${item.project?.key_prefix || ''}`.toLowerCase();
+    const matchSearch = searchText.includes(search.toLowerCase());
     const matchPriority = priorityFilter ? item.priority === priorityFilter : true;
     const matchStatus = statusFilter ? item.workflow_status?.name === statusFilter : true;
     return matchSearch && matchPriority && matchStatus;
@@ -131,6 +143,7 @@ export default function HierarchicalBacklog() {
           <div className={styles.nodeInfo}>
             <div className={styles.nodeTitle}>
               <span style={{ color: 'var(--primary-color)' }}>{item.project_key}</span>
+              {item.project?.name && <span className={styles.projectBadge}>{item.project.name}</span>}
               {item.title}
             </div>
             <div className={styles.nodeMeta}>
@@ -175,10 +188,75 @@ export default function HierarchicalBacklog() {
         {hasChildren && isExpanded && (
           <div className={styles.childrenContainer}>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {item.children.map((child: any) => renderItem(child, type === 'EPIC' ? 'STORY' : 'TASK'))}
+            {item.children.map((child: any) => renderItem(child, child.type))}
           </div>
         )}
       </div>
+    );
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buildProjectTree = (project: any) => {
+    const backlogTypes = new Set(['EPIC', 'STORY', 'TASK']);
+    const projectItems = items.filter(item => item.project_id === project.id && backlogTypes.has(item.type));
+    const itemMap = new Map(projectItems.map(item => [item.id, { ...item, children: [] as any[] }]));
+    const attachedIds = new Set<string>();
+
+    itemMap.forEach(item => {
+      if (item.parent_id && itemMap.has(item.parent_id)) {
+        itemMap.get(item.parent_id).children.push(item);
+        attachedIds.add(item.id);
+      }
+    });
+
+    const typeOrder = { EPIC: 0, STORY: 1, TASK: 2 };
+    const sortItems = (a: any, b: any) => {
+      const typeDiff = typeOrder[a.type as keyof typeof typeOrder] - typeOrder[b.type as keyof typeof typeOrder];
+      if (typeDiff !== 0) return typeDiff;
+      return String(a.project_key).localeCompare(String(b.project_key), undefined, { numeric: true });
+    };
+
+    itemMap.forEach(item => item.children.sort(sortItems));
+    return Array.from(itemMap.values())
+      .filter(item => item.type === 'EPIC' || !attachedIds.has(item.id))
+      .sort(sortItems);
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderProject = (project: any) => {
+    const projectItems = buildProjectTree(project);
+    const projectSearchText = `${project.name} ${project.key_prefix}`.toLowerCase();
+    const projectMatchesSearch = search && projectSearchText.includes(search.toLowerCase());
+    const matchingItems = projectMatchesSearch && !priorityFilter && !statusFilter
+      ? projectItems
+      : projectItems.filter(item => hasMatchingChild(item));
+    const hasFilters = Boolean(search || priorityFilter || statusFilter);
+    if (hasFilters && matchingItems.length === 0) return null;
+
+    return (
+      <section key={project.id} className={styles.projectSection}>
+        <div className={styles.projectHeader}>
+          <div>
+            <div className={styles.projectTitle}>{project.name}</div>
+            <div className={styles.projectMeta}>
+              {project.key_prefix} - {projectItems.length} item(ns) de backlog
+            </div>
+          </div>
+          <button
+            className={styles.actionBtn}
+            onClick={() => setModalState({ isOpen: true, mode: 'CREATE', type: 'EPIC', projectId: project.id })}
+          >
+            + Epico
+          </button>
+        </div>
+        <div className={styles.projectItems}>
+          {matchingItems.length > 0 ? (
+            matchingItems.map(item => renderItem(item, item.type))
+          ) : (
+            <div className={styles.projectEmpty}>Nenhum item de backlog neste projeto.</div>
+          )}
+        </div>
+      </section>
     );
   };
 
@@ -191,7 +269,7 @@ export default function HierarchicalBacklog() {
         </div>
         <button 
           className="btn-primary"
-          onClick={() => setModalState({ isOpen: true, mode: 'CREATE', type: 'EPIC' })}
+          onClick={() => setModalState({ isOpen: true, mode: 'CREATE', type: 'EPIC', projectId })}
           disabled={!projectId}
         >
           + Novo Épico
@@ -224,13 +302,13 @@ export default function HierarchicalBacklog() {
       <div className={styles.treeContainer} style={{ marginTop: '20px' }}>
         {loading ? (
           <div className={styles.emptyState}>Carregando backlog...</div>
-        ) : items.length === 0 ? (
+        ) : projects.length === 0 ? (
           <div className={styles.emptyState}>
             <h3>Nenhum Épico encontrado</h3>
             <p>Comece criando o primeiro Épico do seu projeto.</p>
           </div>
         ) : (
-          items.map(epic => renderItem(epic, 'EPIC'))
+          projects.map(renderProject)
         )}
       </div>
 
@@ -245,6 +323,7 @@ export default function HierarchicalBacklog() {
           type={modalState.type}
           parentData={modalState.parentData}
           initialData={modalState.initialData}
+          projectId={modalState.projectId}
         />
       )}
     </div>

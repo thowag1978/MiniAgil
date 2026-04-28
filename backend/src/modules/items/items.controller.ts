@@ -52,7 +52,13 @@ export class ItemsController {
 
   async list(req: any, res: Response) {
     const { project_id, sprint_id, type } = req.query;
-    const where: Prisma.ItemWhereInput = {};
+    const where: Prisma.ItemWhereInput = {
+      project: {
+        members: {
+          some: { user_id: req.user.id }
+        }
+      }
+    };
 
     if (project_id) where.project_id = String(project_id);
     if (sprint_id) where.sprint_id = String(sprint_id);
@@ -119,23 +125,34 @@ export class ItemsController {
 
   async listHierarchical(req: any, res: Response) {
     const { project_id } = req.query;
-    if (!project_id) return res.status(400).json({ error: 'project_id is required' });
+    const where: Prisma.ItemWhereInput = {
+      type: 'EPIC',
+      project: {
+        members: {
+          some: { user_id: req.user.id }
+        }
+      }
+    };
+
+    if (project_id) {
+      where.project_id = String(project_id);
+    }
 
     const epics = await prisma.item.findMany({
-      where: {
-        project_id: String(project_id),
-        type: 'EPIC'
-      },
+      where,
       include: {
         assignee: { select: { name: true, email: true } },
+        project: { select: { id: true, name: true, key_prefix: true } },
         workflow_status: true,
         children: {
           include: {
             assignee: { select: { name: true, email: true } },
+            project: { select: { id: true, name: true, key_prefix: true } },
             workflow_status: true,
             children: {
               include: {
                 assignee: { select: { name: true, email: true } },
+                project: { select: { id: true, name: true, key_prefix: true } },
                 workflow_status: true,
               },
               orderBy: { createdAt: 'asc' }

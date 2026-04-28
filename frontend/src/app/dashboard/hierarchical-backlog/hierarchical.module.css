@@ -103,6 +103,11 @@
   border-left: 4px solid #2196F3;
 }
 
+.nodeContent.project {
+  border-left: 4px solid #ffb300;
+  background: rgba(255, 179, 0, 0.08);
+}
+
 .expandBtn {
   background: none;
   border: none;

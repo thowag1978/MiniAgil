@@ -1,49 +1,32 @@
-'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+﻿'use client';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './board.module.css';
 import IssueModal from '../../../components/IssueModal';
 import CreateItemModal from '../../../components/CreateItemModal';
+import { itemsApi } from '@/lib/api/items';
+import { queryKeys } from '@/lib/query/keys';
+import type { Item } from '@/lib/types';
 
 export default function KanbanBoard() {
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedIssue, setSelectedIssue] = useState<Item | null>(null);
 
-  const fetchItems = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      // For now, let's fetch all items. 
-      // If there's a selected project, we'd append ?project_id=...
-      const res = await fetch('http://localhost:4000/api/items', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const itemsQuery = useQuery({
+    queryKey: queryKeys.items,
+    queryFn: () => itemsApi.list(),
+  });
 
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+  const items = itemsQuery.data || [];
 
-  const openIssue = (issue: any) => {
+  const openIssue = (issue: Item) => {
     setSelectedIssue(issue);
     setIsModalOpen(true);
   };
 
-  const handleIssueUpdate = () => {
-    fetchItems(); // refresh the board on save
-  };
-
-  const getProjectLabel = (item: any) => {
+  const getProjectLabel = (item: Item) => {
     if (item.project?.name) return item.project.name;
     if (item.project?.key_prefix) return item.project.key_prefix;
     return item.project_key?.split('-')[0] || 'Projeto';
@@ -54,7 +37,7 @@ export default function KanbanBoard() {
   const paraRevisaoItems = items.filter(item => item.workflow_status?.name === 'PARA REVISÃO');
   const concluidoItems = items.filter(item => item.workflow_status?.name === 'CONCLUÍDO');
 
-  const renderColumn = (title: string, columnItems: any[]) => (
+  const renderColumn = (title: string, columnItems: Item[]) => (
     <div className={styles.column}>
       <div className={styles.columnHeader}>
         <h3>{title}</h3>
@@ -83,12 +66,14 @@ export default function KanbanBoard() {
         <h1>Kanban do Projeto</h1>
         <div className={styles.filters}>
           <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Tarefa</button>
-          <button className={styles.filterChip} onClick={fetchItems}>🔄 Refresh</button>
+          <button className={styles.filterChip} onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.items })}>Refresh</button>
         </div>
       </div>
-      
-      {loading ? (
+
+      {itemsQuery.isLoading ? (
         <div style={{ padding: 20 }}>Carregando tarefas...</div>
+      ) : itemsQuery.isError ? (
+        <div style={{ padding: 20, color: '#ff6b6b' }}>Falha ao carregar tarefas.</div>
       ) : (
         <div className={styles.boardColumns}>
           {renderColumn('A Fazer', aFazerItems)}
@@ -99,22 +84,24 @@ export default function KanbanBoard() {
       )}
 
       {isModalOpen && (
-        <IssueModal 
-          issue={selectedIssue} 
-          onClose={() => setIsModalOpen(false)} 
-          onUpdate={handleIssueUpdate}
+        <IssueModal
+          issue={selectedIssue}
+          onClose={() => setIsModalOpen(false)}
+          onUpdate={() => queryClient.invalidateQueries({ queryKey: queryKeys.items })}
         />
       )}
 
       {isCreateModalOpen && (
-        <CreateItemModal 
-          onClose={() => setIsCreateModalOpen(false)} 
+        <CreateItemModal
+          onClose={() => setIsCreateModalOpen(false)}
           onSuccess={() => {
             setIsCreateModalOpen(false);
-            fetchItems();
+            queryClient.invalidateQueries({ queryKey: queryKeys.items });
           }}
         />
       )}
     </div>
   );
 }
+
+

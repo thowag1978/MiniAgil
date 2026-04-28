@@ -1,16 +1,22 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './hierarchical.module.css';
 import HierarchicalItemModal from '../../../components/HierarchicalItemModal';
+import { itemsApi } from '@/lib/api/items';
+import { queryKeys } from '@/lib/query/keys';
+import type { Item, ProjectHierarchy } from '@/lib/types';
+
+interface TreeItem extends Item {
+  children: TreeItem[];
+}
+
+interface TreeProject extends ProjectHierarchy {
+  epics: TreeItem[];
+}
 
 export default function HierarchicalBacklog() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [items, setItems] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [projects, setProjects] = useState<any[]>([]);
-  const [projectId, setProjectId] = useState('');
-  const [loading, setLoading] = useState(true);
-  
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
@@ -20,54 +26,29 @@ export default function HierarchicalBacklog() {
     isOpen: boolean;
     mode: 'CREATE' | 'EDIT';
     type: 'EPIC' | 'STORY' | 'TASK';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    parentData?: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    initialData?: any;
-    projectId?: string;
+    projectData?: { id: string; name: string; key_prefix: string };
+    parentData?: TreeItem;
+    initialData?: TreeItem;
   }>({ isOpen: false, mode: 'CREATE', type: 'EPIC' });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
+  const treeQuery = useQuery({
+    queryKey: queryKeys.hierarchicalTree,
+    queryFn: () => itemsApi.listHierarchicalTree(),
+  });
 
-      // 1. Get Projects
-      const projRes = await fetch('http://localhost:4000/api/projects', { headers });
-      if (!projRes.ok) throw new Error('Failed to fetch project');
-      const projects = await projRes.json();
-      setProjects(projects);
-      if (projects.length === 0) {
-        setItems([]);
-        setProjectId('');
-        setLoading(false);
-        return;
-      }
-      const pId = projects[0].id;
-      setProjectId(pId);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => itemsApi.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalTree });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items });
+      queryClient.invalidateQueries({ queryKey: ['items', 'backlog-overview'] });
+    },
+    onError: (error: Error) => {
+      alert(`Erro: ${error.message}`);
+    },
+  });
 
-      // 2. Get all backlog items for all user projects
-      const itemsRes = await fetch('http://localhost:4000/api/items', { headers });
-      if (itemsRes.ok) {
-        const data = await itemsRes.json();
-        setItems(data);
-        const expandedIds = new Set<string>(projects.map((project: any) => project.id));
-        data.forEach((item: any) => {
-          if (item.type === 'EPIC' || item.type === 'STORY') expandedIds.add(item.id);
-        });
-        setExpanded(expandedIds);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const projects = (treeQuery.data || []) as TreeProject[];
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
@@ -78,64 +59,56 @@ export default function HierarchicalBacklog() {
     });
   };
 
-  const handleDelete = async (id: string, hasChildren: boolean) => {
+  const handleDelete = (id: string, hasChildren: boolean) => {
     if (hasChildren) {
-      alert('Não é possível excluir um item que possui filhos vinculados.');
+      alert('Nao e possivel excluir um item que possui filhos vinculados.');
       return;
     }
     if (!confirm('Tem certeza que deseja excluir este item?')) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:4000/api/items/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        fetchData();
-      } else {
-        const err = await res.json();
-        alert(`Erro: ${err.error}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Erro de rede ao excluir');
-    }
+    deleteMutation.mutate(id);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filterItem = (item: any): boolean => {
+  const filterItem = (item: TreeItem): boolean => {
+    const query = search.toLowerCase();
     const searchText = `${item.title} ${item.project_key} ${item.project?.name || ''} ${item.project?.key_prefix || ''}`.toLowerCase();
-    const matchSearch = searchText.includes(search.toLowerCase());
+    const matchSearch = searchText.includes(query);
     const matchPriority = priorityFilter ? item.priority === priorityFilter : true;
     const matchStatus = statusFilter ? item.workflow_status?.name === statusFilter : true;
     return matchSearch && matchPriority && matchStatus;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const hasMatchingChild = (item: any): boolean => {
+  const hasMatchingChild = (item: TreeItem): boolean => {
     if (filterItem(item)) return true;
     if (item.children && item.children.length > 0) {
-      return item.children.some((child: any) => hasMatchingChild(child));
+      return item.children.some((child) => hasMatchingChild(child));
     }
     return false;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderItem = (item: any, type: 'EPIC'|'STORY'|'TASK') => {
+  const projectMatches = (project: TreeProject): boolean => {
+    const query = search.toLowerCase();
+    const projectMatch = !query ||
+      project.name.toLowerCase().includes(query) ||
+      project.key_prefix.toLowerCase().includes(query);
+    if (projectMatch && !priorityFilter && !statusFilter) return true;
+    return project.epics.some((epic) => hasMatchingChild(epic));
+  };
+
+  const renderItem = (item: TreeItem, type: 'EPIC' | 'STORY' | 'TASK') => {
     if (!hasMatchingChild(item)) return null;
 
-    const isExpanded = expanded.has(item.id);
+    const nodeId = `item-${item.id}`;
+    const isExpanded = expanded.has(nodeId);
     const hasChildren = item.children && item.children.length > 0;
-    const icons = { EPIC: '👑', STORY: '📖', TASK: '✅' };
+    const icons = { EPIC: 'EP', STORY: 'ST', TASK: 'TS' };
     const classes = { EPIC: styles.epic, STORY: styles.story, TASK: styles.task };
 
     return (
       <div key={item.id} className={styles.treeNode}>
         <div className={`${styles.nodeContent} ${classes[type]}`}>
-          <button 
+          <button
             className={`${styles.expandBtn} ${!hasChildren ? styles.hidden : ''} ${isExpanded ? styles.expanded : ''}`}
-            onClick={() => toggleExpand(item.id)}
+            onClick={() => toggleExpand(nodeId)}
           >
             ▶
           </button>
@@ -155,31 +128,25 @@ export default function HierarchicalBacklog() {
           </div>
           <div className={styles.nodeActions}>
             {type === 'EPIC' && (
-              <button 
+              <button
                 className={styles.actionBtn}
                 onClick={() => setModalState({ isOpen: true, mode: 'CREATE', type: 'STORY', parentData: item })}
               >
-                + História
+                + Historia
               </button>
             )}
             {type === 'STORY' && (
-              <button 
+              <button
                 className={styles.actionBtn}
                 onClick={() => setModalState({ isOpen: true, mode: 'CREATE', type: 'TASK', parentData: item })}
               >
                 + Atividade
               </button>
             )}
-            <button 
-              className={styles.actionBtn}
-              onClick={() => setModalState({ isOpen: true, mode: 'EDIT', type, initialData: item })}
-            >
+            <button className={styles.actionBtn} onClick={() => setModalState({ isOpen: true, mode: 'EDIT', type, initialData: item })}>
               Editar
             </button>
-            <button 
-              className={`${styles.actionBtn} ${styles.danger}`}
-              onClick={() => handleDelete(item.id, hasChildren)}
-            >
+            <button className={`${styles.actionBtn} ${styles.danger}`} onClick={() => handleDelete(item.id, hasChildren)}>
               Excluir
             </button>
           </div>
@@ -187,143 +154,143 @@ export default function HierarchicalBacklog() {
 
         {hasChildren && isExpanded && (
           <div className={styles.childrenContainer}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {item.children.map((child: any) => renderItem(child, child.type))}
+            {item.children.map((child) => renderItem(child, child.type as 'EPIC' | 'STORY' | 'TASK'))}
           </div>
         )}
       </div>
     );
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buildProjectTree = (project: any) => {
-    const backlogTypes = new Set(['EPIC', 'STORY', 'TASK']);
-    const projectItems = items.filter(item => item.project_id === project.id && backlogTypes.has(item.type));
-    const itemMap = new Map(projectItems.map(item => [item.id, { ...item, children: [] as any[] }]));
-    const attachedIds = new Set<string>();
+  const renderProject = (project: TreeProject) => {
+    if (!projectMatches(project)) return null;
 
-    itemMap.forEach(item => {
-      if (item.parent_id && itemMap.has(item.parent_id)) {
-        itemMap.get(item.parent_id).children.push(item);
-        attachedIds.add(item.id);
-      }
-    });
-
-    const typeOrder = { EPIC: 0, STORY: 1, TASK: 2 };
-    const sortItems = (a: any, b: any) => {
-      const typeDiff = typeOrder[a.type as keyof typeof typeOrder] - typeOrder[b.type as keyof typeof typeOrder];
-      if (typeDiff !== 0) return typeDiff;
-      return String(a.project_key).localeCompare(String(b.project_key), undefined, { numeric: true });
-    };
-
-    itemMap.forEach(item => item.children.sort(sortItems));
-    return Array.from(itemMap.values())
-      .filter(item => item.type === 'EPIC' || !attachedIds.has(item.id))
-      .sort(sortItems);
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderProject = (project: any) => {
-    const projectItems = buildProjectTree(project);
-    const projectSearchText = `${project.name} ${project.key_prefix}`.toLowerCase();
-    const projectMatchesSearch = search && projectSearchText.includes(search.toLowerCase());
-    const matchingItems = projectMatchesSearch && !priorityFilter && !statusFilter
-      ? projectItems
-      : projectItems.filter(item => hasMatchingChild(item));
-    const hasFilters = Boolean(search || priorityFilter || statusFilter);
-    if (hasFilters && matchingItems.length === 0) return null;
+    const projectNodeId = `project-${project.id}`;
+    const hasChildren = project.epics.length > 0;
+    const isExpanded = expanded.has(projectNodeId);
 
     return (
-      <section key={project.id} className={styles.projectSection}>
-        <div className={styles.projectHeader}>
-          <div>
-            <div className={styles.projectTitle}>{project.name}</div>
-            <div className={styles.projectMeta}>
-              {project.key_prefix} - {projectItems.length} item(ns) de backlog
+      <div key={project.id} className={styles.treeNode}>
+        <div className={`${styles.nodeContent} ${styles.project}`}>
+          <button
+            className={`${styles.expandBtn} ${!hasChildren ? styles.hidden : ''} ${isExpanded ? styles.expanded : ''}`}
+            onClick={() => toggleExpand(projectNodeId)}
+          >
+            ▶
+          </button>
+          <div className={styles.nodeIcon}>PR</div>
+          <div className={styles.nodeInfo}>
+            <div className={styles.nodeTitle}>
+              <span style={{ color: 'var(--primary-color)' }}>{project.key_prefix}</span>
+              {project.name}
+            </div>
+            <div className={styles.nodeMeta}>
+              <span>Projeto</span>
+              <span>{project.epics.length} item(ns) de backlog</span>
             </div>
           </div>
-          <button
-            className={styles.actionBtn}
-            onClick={() => setModalState({ isOpen: true, mode: 'CREATE', type: 'EPIC', projectId: project.id })}
-          >
-            + Epico
-          </button>
+          <div className={styles.nodeActions}>
+            <button
+              className={styles.actionBtn}
+              onClick={() => setModalState({
+                isOpen: true,
+                mode: 'CREATE',
+                type: 'EPIC',
+                projectData: { id: project.id, name: project.name, key_prefix: project.key_prefix },
+              })}
+            >
+              + Epico
+            </button>
+          </div>
         </div>
-        <div className={styles.projectItems}>
-          {matchingItems.length > 0 ? (
-            matchingItems.map(item => renderItem(item, item.type))
-          ) : (
-            <div className={styles.projectEmpty}>Nenhum item de backlog neste projeto.</div>
-          )}
-        </div>
-      </section>
+
+        {hasChildren && isExpanded && (
+          <div className={styles.childrenContainer}>
+            {project.epics.map((item) => renderItem(item, item.type as 'EPIC' | 'STORY' | 'TASK'))}
+          </div>
+        )}
+      </div>
     );
   };
+
+  const defaultProject = projects[0];
+
+  let content: React.ReactNode;
+  if (treeQuery.isLoading) {
+    content = <div className={styles.emptyState}>Carregando backlog...</div>;
+  } else if (treeQuery.isError) {
+    content = <div className={styles.emptyState}>Erro ao carregar backlog.</div>;
+  } else if (projects.length === 0) {
+    content = <div className={styles.emptyState}>Nenhum projeto encontrado.</div>;
+  } else {
+    const rendered = projects.map(renderProject).filter(Boolean);
+    content = rendered.length > 0 ? rendered : (
+      <div className={styles.emptyState}>
+        <h3>Nenhum item encontrado</h3>
+        <p>Ajuste os filtros para exibir resultados.</p>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
       <header className={styles.header}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 600, marginBottom: '5px' }}>Backlog Hierárquico</h1>
-          <p style={{ color: 'var(--text-dim)' }}>Gerencie Épicos, Histórias e Atividades em estrutura de árvore</p>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 600, marginBottom: '5px' }}>Backlog Hierarquico</h1>
+          <p style={{ color: 'var(--text-dim)' }}>Gerencie Projeto, Epicos, Historias e Atividades em estrutura de arvore</p>
         </div>
-        <button 
+        <button
           className="btn-primary"
-          onClick={() => setModalState({ isOpen: true, mode: 'CREATE', type: 'EPIC', projectId })}
-          disabled={!projectId}
+          onClick={() => defaultProject && setModalState({
+            isOpen: true,
+            mode: 'CREATE',
+            type: 'EPIC',
+            projectData: { id: defaultProject.id, name: defaultProject.name, key_prefix: defaultProject.key_prefix },
+          })}
+          disabled={!defaultProject}
         >
-          + Novo Épico
+          + Novo Epico
         </button>
       </header>
 
       <div className={styles.filters}>
-        <input 
-          className="input-glass" 
-          placeholder="Buscar item..." 
+        <input
+          className="input-glass"
+          placeholder="Buscar projeto, epico, historia ou atividade..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ width: '250px' }}
+          style={{ width: '300px' }}
         />
         <select className="input-glass" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
           <option value="">Todas Prioridades</option>
-          <option value="CRITICAL">Crítica</option>
+          <option value="CRITICAL">Critica</option>
           <option value="HIGH">Alta</option>
-          <option value="MEDIUM">Média</option>
+          <option value="MEDIUM">Media</option>
           <option value="LOW">Baixa</option>
         </select>
         <select className="input-glass" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">Todos Status</option>
           <option value="A FAZER">A FAZER</option>
-          <option value="EM ANDAMENTO">EM ANDAMENTO</option>
+          <option value="EM PROGRESSO">EM PROGRESSO</option>
           <option value="CONCLUIDO">CONCLUIDO</option>
+          <option value="CONCLUÍDO">CONCLUIDO</option>
         </select>
       </div>
 
-      <div className={styles.treeContainer} style={{ marginTop: '20px' }}>
-        {loading ? (
-          <div className={styles.emptyState}>Carregando backlog...</div>
-        ) : projects.length === 0 ? (
-          <div className={styles.emptyState}>
-            <h3>Nenhum Épico encontrado</h3>
-            <p>Comece criando o primeiro Épico do seu projeto.</p>
-          </div>
-        ) : (
-          projects.map(renderProject)
-        )}
-      </div>
+      <div className={styles.treeContainer} style={{ marginTop: '20px' }}>{content}</div>
 
       {modalState.isOpen && (
         <HierarchicalItemModal
           onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))}
           onSuccess={() => {
             setModalState(prev => ({ ...prev, isOpen: false }));
-            fetchData();
+            queryClient.invalidateQueries({ queryKey: queryKeys.hierarchicalTree });
+            queryClient.invalidateQueries({ queryKey: queryKeys.items });
           }}
           mode={modalState.mode}
           type={modalState.type}
+          projectData={modalState.projectData}
           parentData={modalState.parentData}
           initialData={modalState.initialData}
-          projectId={modalState.projectId}
         />
       )}
     </div>

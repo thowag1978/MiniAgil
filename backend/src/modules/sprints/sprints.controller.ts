@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { SprintStatus } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
 
 export class SprintsController {
@@ -32,7 +33,10 @@ export class SprintsController {
     }
 
     const sprints = await prisma.sprint.findMany({
-      where: { project_id: String(project_id) },
+      where: {
+        project_id: String(project_id),
+        project: { members: { some: { user_id: req.user.id } } }
+      },
       orderBy: { createdAt: 'asc' }
     });
 
@@ -40,13 +44,27 @@ export class SprintsController {
   }
 
   async updateStatus(req: any, res: Response) {
-      const { id } = req.params;
-      const { status } = req.body; // PLANNED, ACTIVE, CLOSED
-      
-      const sprint = await prisma.sprint.update({
-          where: { id },
-          data: { status }
-      });
-      res.json(sprint);
+    const { id } = req.params;
+    const { status } = req.body; // PLANNED, ACTIVE, CLOSED
+
+    const normalizedStatus = String(status || '').toUpperCase();
+    if (!['PLANNED', 'ACTIVE', 'CLOSED'].includes(normalizedStatus)) {
+      return res.status(400).json({ error: 'Invalid sprint status' });
+    }
+
+    const sprint = await prisma.sprint.findFirst({
+      where: { id, project: { members: { some: { user_id: req.user.id } } } },
+      select: { id: true }
+    });
+
+    if (!sprint) {
+      return res.status(404).json({ error: 'Sprint not found or access denied' });
+    }
+
+    const updated = await prisma.sprint.update({
+      where: { id: sprint.id },
+      data: { status: normalizedStatus as SprintStatus }
+    });
+    res.json(updated);
   }
 }

@@ -43,6 +43,12 @@ export default function KanbanBoard() {
     fetchItems(); // refresh the board on save
   };
 
+  const getProjectLabel = (item: any) => {
+    if (item.project?.name) return item.project.name;
+    if (item.project?.key_prefix) return item.project.key_prefix;
+    return item.project_key?.split('-')[0] || 'Projeto';
+  };
+
   const aFazerItems = items.filter(item => item.workflow_status?.name === 'A FAZER');
   const emProgressoItems = items.filter(item => item.workflow_status?.name === 'EM PROGRESSO');
   const paraRevisaoItems = items.filter(item => item.workflow_status?.name === 'PARA REVISÃO');
@@ -57,6 +63,7 @@ export default function KanbanBoard() {
       <div className={styles.columnContent}>
         {columnItems.map(item => (
           <div key={item.id} className={styles.ticketCard} onClick={() => openIssue(item)}>
+            <div className={styles.projectTag}>{getProjectLabel(item)}</div>
             <div className={styles.ticketTitle}>{item.title}</div>
             <div className={styles.ticketFooter}>
               <span className={`${styles.ticketType} ${item.type === 'BUG' ? styles.typeBug : item.type === 'STORY' ? styles.typeStory : styles.typeTask}`}>

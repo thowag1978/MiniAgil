@@ -63,6 +63,7 @@ export class ItemsController {
       include: {
         assignee: { select: { name: true, email: true } },
         reporter: { select: { name: true } },
+        project: { select: { id: true, name: true, key_prefix: true } },
         workflow_status: true,
         parent: { select: { id: true, title: true, project_key: true, type: true } },
         children: { select: { id: true, title: true, project_key: true, type: true, workflow_status: true } }

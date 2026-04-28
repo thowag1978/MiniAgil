@@ -107,8 +107,26 @@
 .ticketTitle {
   font-size: 0.95rem;
   font-weight: 500;
+  margin-top: 10px;
   margin-bottom: 12px;
   line-height: 1.4;
+}
+
+.projectTag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #34d399;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ticketFooter {

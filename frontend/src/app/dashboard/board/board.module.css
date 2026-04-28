@@ -112,21 +112,48 @@
   line-height: 1.4;
 }
 
-.projectTag {
+.tagRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.projectTag,
+.sprintTag {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.28);
-  color: #34d399;
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.projectTag {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #34d399;
+}
+
+.sprintTag {
+  max-width: 180px;
+}
+
+.sprintAssigned {
+  background: rgba(92, 111, 255, 0.14);
+  border: 1px solid rgba(92, 111, 255, 0.34);
+  color: #aeb8ff;
+}
+
+.sprintEmpty {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
 }
 
 .ticketFooter {

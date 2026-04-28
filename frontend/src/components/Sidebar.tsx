@@ -29,6 +29,7 @@ export default function Sidebar() {
           <Link href="/dashboard" className={styles.navItem}>Visão Geral</Link>
           <Link href="/dashboard/backlog" className={styles.navItem}>Backlog Ativo</Link>
           <Link href="/dashboard/hierarchical-backlog" className={styles.navItem}>Backlog Hierárquico</Link>
+          <Link href="/dashboard/sprint" className={styles.navItem}>Sprint</Link>
           <Link href="/dashboard/board" className={styles.navItem}>Quadro Kanban</Link>
 
           <div className={styles.navSection}>ADMINISTRAÇÃO</div>

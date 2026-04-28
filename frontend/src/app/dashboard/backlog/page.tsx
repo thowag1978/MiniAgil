@@ -94,7 +94,7 @@ export default function BacklogPage() {
           <input
             type="text"
             className="input-glass"
-            placeholder="Buscar epic, story ou tarefa..."
+            placeholder="Buscar tarefa..."
             style={{ maxWidth: '300px' }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -125,7 +125,7 @@ export default function BacklogPage() {
         </div>
         <div className={styles.issueList}>
           {filteredSprintItems.length === 0 ? (
-            <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhum item na sprint ativa.</div>
+            <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhuma tarefa na sprint ativa.</div>
           ) : (
             filteredSprintItems.map(renderIssueCard)
           )}
@@ -136,13 +136,13 @@ export default function BacklogPage() {
         <div className={styles.sprintHeader}>
           <div className={styles.sprintTitle}>
             <h3>Backlog</h3>
-            <span className={styles.sprintDates}>{filteredBacklogItems.length} itens pendentes</span>
+            <span className={styles.sprintDates}>{filteredBacklogItems.length} tarefas pendentes</span>
           </div>
           <button className={`btn-primary ${styles.btnOutline}`} disabled>Criar Sprint</button>
         </div>
         <div className={styles.issueList}>
           {filteredBacklogItems.length === 0 ? (
-            <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhum item no backlog.</div>
+            <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhuma tarefa no backlog.</div>
           ) : (
             filteredBacklogItems.map(renderIssueCard)
           )}

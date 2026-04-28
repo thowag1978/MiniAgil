@@ -1,0 +1,261 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.header h1 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.header p {
+  color: var(--text-secondary);
+  max-width: 680px;
+}
+
+.select {
+  min-width: 220px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 11px 14px;
+  outline: none;
+}
+
+.createPanel,
+.sprintToolbar,
+.listPanel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+}
+
+.createPanel {
+  padding: 20px;
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panelHeader h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.panelHeader span {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.5fr) 160px 160px auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.sprintToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 20px;
+}
+
+.sprintPicker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sprintPicker label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.sprintSummary,
+.statusActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sprintSummary {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.sprintSummary strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.statusBadge {
+  color: #fff;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.statusPLANNED {
+  background: #64748b;
+}
+
+.statusACTIVE {
+  background: #0f9f6e;
+}
+
+.statusCLOSED {
+  background: #7c3aed;
+}
+
+.secondaryButton {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--text-primary);
+}
+
+.secondaryButton:disabled,
+.formGrid button:disabled,
+.listPanel button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.planningGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.listPanel {
+  padding: 20px;
+  min-width: 0;
+}
+
+.storyList {
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+  max-height: 520px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 16px;
+}
+
+.storyRow {
+  display: grid;
+  grid-template-columns: 20px 78px minmax(0, 1fr) 110px;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.storyRow:last-child {
+  border-bottom: none;
+}
+
+.storyRow:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.storyRowDisabled {
+  cursor: not-allowed;
+  color: var(--text-secondary);
+}
+
+.storyKey {
+  color: var(--text-secondary);
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.storyTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storyMeta {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.emptyState {
+  color: var(--text-secondary);
+  padding: 20px;
+}
+
+.note {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  padding: 0 4px 12px;
+}
+
+@media (max-width: 1100px) {
+  .formGrid,
+  .planningGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sprintToolbar,
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sprintToolbar {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .storyRow {
+    grid-template-columns: 20px 70px minmax(0, 1fr);
+  }
+
+  .storyMeta {
+    grid-column: 2 / 4;
+    text-align: left;
+  }
+
+  .sprintPicker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .select {
+    width: 100%;
+  }
+}

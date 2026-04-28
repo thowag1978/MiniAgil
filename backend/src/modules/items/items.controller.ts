@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
 
 export class ItemsController {
@@ -51,13 +52,14 @@ export class ItemsController {
 
   async list(req: any, res: Response) {
     const { project_id, sprint_id, type } = req.query;
+    const where: Prisma.ItemWhereInput = {};
+
+    if (project_id) where.project_id = String(project_id);
+    if (sprint_id) where.sprint_id = String(sprint_id);
+    if (type) where.type = type as any;
 
     const items = await prisma.item.findMany({
-      where: {
-        project_id: project_id ? String(project_id) : undefined,
-        sprint_id: sprint_id ? String(sprint_id) : undefined,
-        type: type ? (type as any) : undefined
-      },
+      where,
       include: {
         assignee: { select: { name: true, email: true } },
         reporter: { select: { name: true } },

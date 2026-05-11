@@ -15,6 +15,7 @@ Monorepo com:
 
 - Backend: copie `backend/.env.example` para `backend/.env`
 - Frontend: copie `frontend/.env.example` para `frontend/.env.local`
+- Links externos do backend usam `FRONTEND_URL` com fallback para `http://localhost:3000`
 
 ## Subindo infraestrutura local
 

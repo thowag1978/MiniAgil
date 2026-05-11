@@ -31,13 +31,14 @@ enum Role {
 }
 
 model Project {
-  id          String   @id @default(uuid())
-  name        String
-  key_prefix  String   @unique
-  description String?
-  owner_id    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(uuid())
+  name             String
+  key_prefix       String   @unique
+  description      String?
+  owner_id         String
+  next_item_number Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   owner   User            @relation("ProjectOwner", fields: [owner_id], references: [id])
   members ProjectMember[]

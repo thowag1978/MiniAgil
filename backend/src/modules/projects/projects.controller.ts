@@ -1,6 +1,16 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../infrastructure/db';
-import { ProjectRole } from '@prisma/client';
+import { canViewProject, isProjectOwnerOrAdmin } from '../../services/permissions';
+
+const projectResponseSelect = {
+  id: true,
+  name: true,
+  key_prefix: true,
+  description: true,
+  owner_id: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export class ProjectsController {
   async create(req: any, res: Response) {
@@ -10,7 +20,7 @@ export class ProjectsController {
       return res.status(400).json({ error: 'Name and key_prefix are required' });
     }
 
-    const existing = await prisma.project.findUnique({ where: { key_prefix } });
+    const existing = await prisma.project.findUnique({ where: { key_prefix }, select: { id: true } });
     if (existing) {
       return res.status(400).json({ error: 'Key prefix is already in use' });
     }
@@ -27,7 +37,8 @@ export class ProjectsController {
             role: 'OWNER'
           }
         }
-      }
+      },
+      select: projectResponseSelect,
     });
 
     res.status(201).json(project);
@@ -35,13 +46,16 @@ export class ProjectsController {
 
   async list(req: any, res: Response) {
     const projects = await prisma.project.findMany({
-      where: {
-        OR: [
-          { owner_id: req.user.id },
-          { members: { some: { user_id: req.user.id } } }
-        ],
-      },
-      include: {
+      where: req.user.role === 'ADMIN'
+        ? {}
+        : {
+            OR: [
+              { owner_id: req.user.id },
+              { members: { some: { user_id: req.user.id } } }
+            ],
+          },
+      select: {
+        ...projectResponseSelect,
         members: {
           include: { user: { select: { id: true, name: true, email: true } } }
         }
@@ -52,15 +66,15 @@ export class ProjectsController {
 
   async getById(req: any, res: Response) {
     const { id } = req.params;
-    const project = await prisma.project.findFirst({
-      where: {
-        id,
-        OR: [
-          { owner_id: req.user.id },
-          { members: { some: { user_id: req.user.id } } }
-        ],
-      },
-      include: {
+
+    if (!(await canViewProject(req.user.id, id))) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: {
+        ...projectResponseSelect,
         members: { include: { user: { select: { id: true, name: true } } } },
         sprints: true
       }
@@ -81,26 +95,7 @@ export class ProjectsController {
       return res.status(400).json({ error: 'Name and key_prefix are required' });
     }
 
-    const whereAccess =
-      req.user.role === 'ADMIN'
-        ? { id }
-        : {
-            id,
-            OR: [
-              { owner_id: req.user.id },
-              {
-                members: {
-                  some: {
-                    user_id: req.user.id,
-                    role: { in: [ProjectRole.OWNER, ProjectRole.ADMIN] },
-                  },
-                },
-              },
-            ],
-          };
-
-    const project = await prisma.project.findFirst({ where: whereAccess, select: { id: true } });
-    if (!project) {
+    if (!(await isProjectOwnerOrAdmin(req.user.id, id))) {
       return res.status(404).json({ error: 'Project not found or access denied' });
     }
 
@@ -123,6 +118,7 @@ export class ProjectsController {
         key_prefix: normalizedKey,
         description: description ?? null,
       },
+      select: projectResponseSelect,
     });
 
     res.json(updated);

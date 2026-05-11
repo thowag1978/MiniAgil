@@ -7,6 +7,8 @@ process.env.JWT_SECRET = 'test-secret';
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
+    $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
     user: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -19,6 +21,16 @@ const { prismaMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
+    },
+    projectMember: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      count: vi.fn(),
     },
     item: {
       findMany: vi.fn(),
@@ -62,6 +74,7 @@ describe('API critical paths', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((callback: any) => callback(prismaMock));
   });
 
   it('login flow returns token', async () => {
@@ -98,17 +111,23 @@ describe('API critical paths', () => {
   });
 
   it('creates an item', async () => {
-    prismaMock.project.findFirst.mockResolvedValueOnce({
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'ADMIN' });
+    prismaMock.project.findUnique.mockResolvedValueOnce({
       id: 'project-1',
       key_prefix: 'MINI',
     });
-    prismaMock.item.count.mockResolvedValueOnce(1);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{
+      id: 'project-1',
+      key_prefix: 'MINI',
+      next_item_number: 2,
+    }]);
     prismaMock.item.create.mockResolvedValueOnce({
       id: 'item-2',
       project_key: 'MINI-2',
       title: 'Nova tarefa',
       type: 'EPIC',
     });
+    prismaMock.project.update.mockResolvedValueOnce({ id: 'project-1', next_item_number: 3 });
 
     const res = await request(app)
       .post('/api/items')
@@ -124,8 +143,47 @@ describe('API critical paths', () => {
     expect(res.body.project_key).toBe('MINI-2');
   });
 
+  it('allows project OWNER to add a member', async () => {
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({ role: 'USER' })
+      .mockResolvedValueOnce({ id: 'user-2' });
+    prismaMock.projectMember.findFirst.mockResolvedValueOnce({ role: 'OWNER' });
+    prismaMock.projectMember.findUnique.mockResolvedValueOnce(null);
+    prismaMock.projectMember.create.mockResolvedValueOnce({
+      id: 'member-2',
+      project_id: 'project-1',
+      user_id: 'user-2',
+      role: 'MEMBER',
+      user: { id: 'user-2', name: 'Ana', email: 'ana@miniagil.com' },
+    });
+
+    const res = await request(app)
+      .post('/api/projects/project-1/members')
+      .set('Authorization', `Bearer ${makeToken('USER')}`)
+      .send({ user_id: 'user-2', role: 'MEMBER' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe('MEMBER');
+    expect(prismaMock.projectMember.create).toHaveBeenCalled();
+  });
+
+  it('blocks non-admin project member from adding members', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' });
+    prismaMock.projectMember.findFirst.mockResolvedValueOnce(null);
+    prismaMock.project.findFirst.mockResolvedValueOnce(null);
+
+    const res = await request(app)
+      .post('/api/projects/project-1/members')
+      .set('Authorization', `Bearer ${makeToken('USER')}`)
+      .send({ user_id: 'user-2', role: 'MEMBER' });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.projectMember.create).not.toHaveBeenCalled();
+  });
+
   it('updates sprint status', async () => {
-    prismaMock.sprint.findFirst.mockResolvedValueOnce({ id: 'sprint-1' });
+    prismaMock.sprint.findFirst.mockResolvedValueOnce({ id: 'sprint-1', project_id: 'project-1' });
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'ADMIN' });
     prismaMock.sprint.update.mockResolvedValueOnce({ id: 'sprint-1', status: 'ACTIVE' });
 
     const res = await request(app)

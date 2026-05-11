@@ -61,6 +61,7 @@ export interface Item {
   updatedAt: string;
   workflow_status?: WorkflowStatus;
   project?: Project;
+  sprint?: Pick<Sprint, 'id' | 'name' | 'status'> | null;
   assignee?: Pick<AuthUser, 'name' | 'email'> | null;
   reporter?: Pick<AuthUser, 'name'> | null;
   parent?: ItemRef | null;

@@ -3,6 +3,17 @@ import { SprintStatus } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
 import { canCreateItem, canUpdateItem, canViewProject } from '../../services/permissions';
 
+function projectAccessWhere(userId: string, role?: string) {
+  return role === 'ADMIN'
+    ? {}
+    : {
+        OR: [
+          { owner_id: userId },
+          { members: { some: { user_id: userId } } },
+        ],
+      };
+}
+
 export class SprintsController {
   async create(req: any, res: Response) {
     const { name, goal, startDate, endDate, project_id } = req.body;
@@ -12,11 +23,25 @@ export class SprintsController {
     }
 
     if (!(await canCreateItem(req.user.id, project_id))) {
+    const project = await prisma.project.findFirst({
+      where: { id: project_id, ...projectAccessWhere(req.user.id, req.user.role) }
+    });
+
+    if (!project) {
       return res.status(404).json({ error: 'Project not found or access denied' });
     }
 
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate) : null;
+    if ((parsedStartDate && Number.isNaN(parsedStartDate.getTime())) || (parsedEndDate && Number.isNaN(parsedEndDate.getTime()))) {
+      return res.status(400).json({ error: 'Invalid sprint dates' });
+    }
+    if (parsedStartDate && parsedEndDate && parsedEndDate < parsedStartDate) {
+      return res.status(400).json({ error: 'Sprint end date must be after start date' });
+    }
+
     const sprint = await prisma.sprint.create({
-      data: { name, goal, startDate: startDate ? new Date(startDate) : null, endDate: endDate ? new Date(endDate) : null, project_id }
+      data: { name, goal, startDate: parsedStartDate, endDate: parsedEndDate, project_id }
     });
     
     res.status(201).json(sprint);
@@ -35,6 +60,10 @@ export class SprintsController {
 
     const sprints = await prisma.sprint.findMany({
       where: { project_id: String(project_id) },
+      where: {
+        project_id: String(project_id),
+        project: projectAccessWhere(req.user.id, req.user.role)
+      },
       orderBy: { createdAt: 'asc' }
     });
 
@@ -52,6 +81,7 @@ export class SprintsController {
 
     const sprint = await prisma.sprint.findFirst({
       where: { id },
+      where: { id, project: projectAccessWhere(req.user.id, req.user.role) },
       select: { id: true, project_id: true }
     });
 
@@ -61,6 +91,19 @@ export class SprintsController {
 
     if (!(await canUpdateItem(req.user.id, sprint.project_id))) {
       return res.status(403).json({ error: 'You do not have permission to update sprints in this project' });
+    if (normalizedStatus === 'ACTIVE') {
+      const activeSprint = await prisma.sprint.findFirst({
+        where: {
+          id: { not: id },
+          status: 'ACTIVE',
+          project_id: sprint.project_id,
+        },
+        select: { id: true },
+      });
+
+      if (activeSprint) {
+        return res.status(400).json({ error: 'Project already has an active sprint' });
+      }
     }
 
     const updated = await prisma.sprint.update({

@@ -23,7 +23,7 @@ export default function DashboardPage() {
     <div className="animate-fade-in">
       <div className={styles.dashHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1>Meus Itens</h1>
+          <h1>Minhas Tarefas</h1>
           <p style={{ color: 'var(--text-secondary)' }}>Resumo das tarefas atribuídas ou reportadas por você.</p>
         </div>
         <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Item</button>
@@ -37,7 +37,7 @@ export default function DashboardPage() {
         <>
           <div className={styles.metricsGrid}>
             <div className={styles.metricCard}>
-              <div className={styles.metricTitle}>ITENS PENDENTES</div>
+              <div className={styles.metricTitle}>TAREFAS PENDENTES</div>
               <div className={styles.metricValue}>{counts.pending}</div>
             </div>
             <div className={styles.metricCard}>
@@ -63,9 +63,9 @@ export default function DashboardPage() {
                       <div className={styles.projectKey}>{project.key_prefix}</div>
                     </div>
                     <div className={styles.projectStats}>
-                      <span>Total: {project.totalItems}</span>
-                      <span>Abertos: {project.openItems}</span>
-                      <span>Concluídos: {project.doneItems}</span>
+                      <span>Tarefas: {project.totalItems}</span>
+                      <span>Abertas: {project.openItems}</span>
+                      <span>Concluídas: {project.doneItems}</span>
                     </div>
                   </div>
                 ))}
@@ -77,7 +77,7 @@ export default function DashboardPage() {
             <h2>Fila de Trabalho</h2>
             <div className={styles.itemList}>
               {recentItems.length === 0 ? (
-                <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhum item encontrado.</div>
+                <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhuma tarefa encontrada.</div>
               ) : (
                 recentItems.map((item) => (
                   <div key={item.id} className={styles.itemRow}>

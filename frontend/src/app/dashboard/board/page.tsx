@@ -10,13 +10,14 @@ import type { Item } from '@/lib/types';
 
 export default function KanbanBoard() {
   const queryClient = useQueryClient();
+  const boardItemsKey = queryKeys.itemsByFilter('kanban:tasks');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Item | null>(null);
 
   const itemsQuery = useQuery({
-    queryKey: queryKeys.items,
-    queryFn: () => itemsApi.list(),
+    queryKey: boardItemsKey,
+    queryFn: () => itemsApi.list({ type: 'TASK' }),
   });
 
   const items = itemsQuery.data || [];
@@ -30,6 +31,11 @@ export default function KanbanBoard() {
     if (item.project?.name) return item.project.name;
     if (item.project?.key_prefix) return item.project.key_prefix;
     return item.project_key?.split('-')[0] || 'Projeto';
+  };
+
+  const getSprintLabel = (item: Item) => {
+    if (item.sprint?.name) return item.sprint.name;
+    return 'Sem sprint';
   };
 
   const aFazerItems = items.filter(item => item.workflow_status?.name === 'A FAZER');
@@ -46,7 +52,12 @@ export default function KanbanBoard() {
       <div className={styles.columnContent}>
         {columnItems.map(item => (
           <div key={item.id} className={styles.ticketCard} onClick={() => openIssue(item)}>
-            <div className={styles.projectTag}>{getProjectLabel(item)}</div>
+            <div className={styles.tagRow}>
+              <div className={styles.projectTag}>{getProjectLabel(item)}</div>
+              <div className={`${styles.sprintTag} ${item.sprint ? styles.sprintAssigned : styles.sprintEmpty}`}>
+                {getSprintLabel(item)}
+              </div>
+            </div>
             <div className={styles.ticketTitle}>{item.title}</div>
             <div className={styles.ticketFooter}>
               <span className={`${styles.ticketType} ${item.type === 'BUG' ? styles.typeBug : item.type === 'STORY' ? styles.typeStory : styles.typeTask}`}>
@@ -66,7 +77,7 @@ export default function KanbanBoard() {
         <h1>Kanban do Projeto</h1>
         <div className={styles.filters}>
           <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Tarefa</button>
-          <button className={styles.filterChip} onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.items })}>Refresh</button>
+          <button className={styles.filterChip} onClick={() => queryClient.invalidateQueries({ queryKey: boardItemsKey })}>Refresh</button>
         </div>
       </div>
 
@@ -87,7 +98,7 @@ export default function KanbanBoard() {
         <IssueModal
           issue={selectedIssue}
           onClose={() => setIsModalOpen(false)}
-          onUpdate={() => queryClient.invalidateQueries({ queryKey: queryKeys.items })}
+          onUpdate={() => queryClient.invalidateQueries({ queryKey: boardItemsKey })}
         />
       )}
 
@@ -96,6 +107,7 @@ export default function KanbanBoard() {
           onClose={() => setIsCreateModalOpen(false)}
           onSuccess={() => {
             setIsCreateModalOpen(false);
+            queryClient.invalidateQueries({ queryKey: boardItemsKey });
             queryClient.invalidateQueries({ queryKey: queryKeys.items });
           }}
         />

@@ -146,6 +146,7 @@ export class ItemsController {
         assignee: { select: { name: true, email: true } },
         reporter: { select: { name: true } },
         project: { select: { id: true, name: true, key_prefix: true } },
+        sprint: { select: { id: true, name: true, status: true } },
         workflow_status: true,
         parent: { select: { id: true, title: true, project_key: true, type: true } },
         children: { select: { id: true, title: true, project_key: true, type: true, workflow_status: true } },
@@ -225,6 +226,7 @@ export class ItemsController {
   async dashboardMetrics(req: any, res: Response) {
     const myItems = await prisma.item.findMany({
       where: {
+        type: 'TASK',
         project: {
           OR: [
             { owner_id: req.user.id },
@@ -255,7 +257,7 @@ export class ItemsController {
 
     const itemsByProject = projectIds.length > 0
       ? await prisma.item.findMany({
-          where: { project_id: { in: projectIds } },
+          where: { project_id: { in: projectIds }, type: 'TASK' },
           select: { project_id: true, workflow_status: { select: { name: true } } },
         })
       : [];
@@ -348,11 +350,27 @@ export class ItemsController {
           orderBy: { createdAt: 'asc' },
         })
       : [];
+    const sprintItemsWhere: Prisma.ItemWhereInput = {
+      project_id: project.id,
+      type: 'TASK',
+    };
+    if (activeSprint?.id) {
+      sprintItemsWhere.sprint_id = activeSprint.id;
+    }
+
+    const sprintItems = await prisma.item.findMany({
+      where: sprintItemsWhere,
+      include: {
+        workflow_status: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
 
     const backlogItems = await prisma.item.findMany({
       where: {
         project_id: project.id,
         sprint_id: null,
+        type: 'TASK',
       },
       include: {
         workflow_status: true,

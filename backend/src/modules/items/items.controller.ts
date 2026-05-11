@@ -343,6 +343,7 @@ export class ItemsController {
           where: {
             project_id: project.id,
             sprint_id: activeSprint.id,
+            type: 'TASK',
           },
           include: {
             workflow_status: true,
@@ -350,21 +351,6 @@ export class ItemsController {
           orderBy: { createdAt: 'asc' },
         })
       : [];
-    const sprintItemsWhere: Prisma.ItemWhereInput = {
-      project_id: project.id,
-      type: 'TASK',
-    };
-    if (activeSprint?.id) {
-      sprintItemsWhere.sprint_id = activeSprint.id;
-    }
-
-    const sprintItems = await prisma.item.findMany({
-      where: sprintItemsWhere,
-      include: {
-        workflow_status: true,
-      },
-      orderBy: { createdAt: 'asc' },
-    });
 
     const backlogItems = await prisma.item.findMany({
       where: {

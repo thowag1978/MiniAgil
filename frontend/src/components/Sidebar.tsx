@@ -13,6 +13,7 @@ const mainNavItems = [
   { href: '/dashboard/projects', label: 'Projetos' },
   { href: '/dashboard/backlog', label: 'Backlog Ativo' },
   { href: '/dashboard/hierarchical-backlog', label: 'Backlog Hierárquico' },
+  { href: '/dashboard/sprint', label: 'Sprint' },
   { href: '/dashboard/board', label: 'Quadro Kanban' },
 ];
 
@@ -52,11 +53,6 @@ export default function Sidebar() {
               {item.label}
             </Link>
           ))}
-          <Link href="/dashboard" className={styles.navItem}>Visão Geral</Link>
-          <Link href="/dashboard/backlog" className={styles.navItem}>Backlog Ativo</Link>
-          <Link href="/dashboard/hierarchical-backlog" className={styles.navItem}>Backlog Hierárquico</Link>
-          <Link href="/dashboard/sprint" className={styles.navItem}>Sprint</Link>
-          <Link href="/dashboard/board" className={styles.navItem}>Quadro Kanban</Link>
 
           {user?.role === 'ADMIN' && (
             <>

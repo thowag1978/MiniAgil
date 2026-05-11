@@ -37,6 +37,7 @@ async function main() {
       name: 'MiniAgil Platform HQ', 
       key_prefix: 'MINI', 
       description: 'The internal project management hub',
+      next_item_number: 4,
       owner_id: admin.id,
       members: { create: { user_id: admin.id, role: 'OWNER' } }
     },

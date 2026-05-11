@@ -12,6 +12,10 @@ function getJwtSecret(): string {
 }
 const JWT_SECRET = getJwtSecret();
 
+function getFrontendUrl(): string {
+  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+}
+
 export class AuthController {
   async register(req: Request, res: Response) {
     const { name, email, password } = req.body;
@@ -63,7 +67,7 @@ export class AuthController {
     const secret = JWT_SECRET + user.password;
     const token = jwt.sign({ id: user.id }, secret, { expiresIn: '15m' });
 
-    const resetLink = `http://localhost:3001/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    const resetLink = `${getFrontendUrl()}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
     
     console.log('\n=============================================');
     console.log('🔒 PASSWORD RECOVERY LINK REQUESTED');

@@ -34,6 +34,8 @@ npx prisma migrate dev
 
 Veja `./.env.example`.
 
+`FRONTEND_URL` define a origem usada em links externos, como reset de senha. Fallback: `http://localhost:3000`.
+
 ## Testes implementados
 
 Arquivo: `tests/api.test.ts`

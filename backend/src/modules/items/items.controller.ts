@@ -1,6 +1,13 @@
 import { Request, Response } from 'express';
 import { ItemType, Prisma } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
+import { canCreateItem, canDeleteItem, canUpdateItem, canViewProject } from '../../services/permissions';
+
+type LockedProjectCounter = {
+  id: string;
+  key_prefix: string;
+  next_item_number: number;
+};
 
 function normalizeStatusName(statusName?: string | null): string {
   return (statusName || '')
@@ -29,14 +36,13 @@ export class ItemsController {
       return res.status(400).json({ error: 'Type, title, project_id, and workflow_status_id are required' });
     }
 
-    const project = await prisma.project.findFirst({
-      where: {
-        id: project_id,
-        OR: [
-          { owner_id: req.user.id },
-          { members: { some: { user_id: req.user.id } } },
-        ],
-      },
+    if (!(await canCreateItem(req.user.id, project_id))) {
+      return res.status(403).json({ error: 'You do not have permission to create items in this project' });
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: project_id },
+      select: { id: true, key_prefix: true },
     });
     if (!project) return res.status(404).json({ error: 'Project not found or access denied' });
 
@@ -62,61 +68,68 @@ export class ItemsController {
       }
     }
 
-    let item = null;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const count = await prisma.item.count({ where: { project_id } });
-      const project_key = `${project.key_prefix}-${count + 1}`;
+    const item = await prisma.$transaction(async (tx) => {
+      const [lockedProject] = await tx.$queryRaw<LockedProjectCounter[]>`
+        SELECT id, key_prefix, next_item_number
+        FROM projects
+        WHERE id = ${project_id}
+        FOR UPDATE
+      `;
 
-      try {
-        item = await prisma.item.create({
-          data: {
-            project_key,
-            type: itemType,
-            title,
-            description,
-            priority: priority || 'MEDIUM',
-            reporter_id: req.user.id,
-            project_id,
-            sprint_id,
-            parent_id,
-            workflow_status_id,
-            acceptance_criteria,
-            estimate: estimate ? parseInt(estimate, 10) : null,
-          },
-        });
-        break;
-      } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002' &&
-          Array.isArray(error.meta?.target) &&
-          error.meta.target.includes('project_key')
-        ) {
-          continue;
-        }
-        throw error;
+      if (!lockedProject) {
+        throw new Error('Project not found while generating item key');
       }
-    }
 
-    if (!item) {
-      return res.status(409).json({ error: 'Failed to generate unique project key. Please retry.' });
-    }
+      const project_key = `${lockedProject.key_prefix}-${lockedProject.next_item_number}`;
+
+      const created = await tx.item.create({
+        data: {
+          project_key,
+          type: itemType,
+          title,
+          description,
+          priority: priority || 'MEDIUM',
+          reporter_id: req.user.id,
+          project_id,
+          sprint_id,
+          parent_id,
+          workflow_status_id,
+          acceptance_criteria,
+          estimate: estimate ? parseInt(estimate, 10) : null,
+        },
+      });
+
+      await tx.project.update({
+        where: { id: lockedProject.id },
+        data: { next_item_number: { increment: 1 } },
+      });
+
+      return created;
+    });
 
     res.status(201).json(item);
   }
 
   async list(req: any, res: Response) {
     const { project_id, sprint_id, type } = req.query;
-    const where: Prisma.ItemWhereInput = {
-      project: {
-        OR: [
-          { owner_id: req.user.id },
-          { members: { some: { user_id: req.user.id } } },
-        ],
-      },
-    };
+    const where: Prisma.ItemWhereInput = req.user.role === 'ADMIN'
+      ? {}
+      : {
+          project: {
+            OR: [
+              { owner_id: req.user.id },
+              { members: { some: { user_id: req.user.id } } },
+            ],
+          },
+        };
 
-    if (project_id) where.project_id = String(project_id);
+    if (project_id) {
+      const projectId = String(project_id);
+      if (!(await canViewProject(req.user.id, projectId))) {
+        return res.status(404).json({ error: 'Project not found or access denied' });
+      }
+      where.project_id = projectId;
+    }
     if (sprint_id) where.sprint_id = String(sprint_id);
 
     if (type) {
@@ -149,20 +162,16 @@ export class ItemsController {
     const { workflow_status_id, assignee_id, sprint_id, priority, title, description, parent_id, acceptance_criteria, estimate } = req.body;
 
     const existingItem = await prisma.item.findFirst({
-      where: {
-        id,
-        project: {
-          OR: [
-            { owner_id: req.user.id },
-            { members: { some: { user_id: req.user.id } } },
-          ],
-        },
-      },
+      where: { id },
       select: { id: true, type: true, project_id: true },
     });
 
     if (!existingItem) {
       return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (!(await canUpdateItem(req.user.id, existingItem.project_id))) {
+      return res.status(403).json({ error: 'You do not have permission to update items in this project' });
     }
 
     if (parent_id !== undefined && parent_id !== null) {
@@ -311,14 +320,12 @@ export class ItemsController {
       return res.status(400).json({ error: 'project_id is required' });
     }
 
-    const project = await prisma.project.findFirst({
-      where: {
-        id: String(project_id),
-        OR: [
-          { owner_id: req.user.id },
-          { members: { some: { user_id: req.user.id } } },
-        ],
-      },
+    if (!(await canViewProject(req.user.id, String(project_id)))) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: String(project_id) },
       select: { id: true, name: true, key_prefix: true },
     });
 
@@ -331,6 +338,18 @@ export class ItemsController {
       orderBy: { createdAt: 'desc' },
     });
 
+    const sprintItems = activeSprint?.id
+      ? await prisma.item.findMany({
+          where: {
+            project_id: project.id,
+            sprint_id: activeSprint.id,
+          },
+          include: {
+            workflow_status: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
     const sprintItemsWhere: Prisma.ItemWhereInput = {
       project_id: project.id,
       type: 'TASK',
@@ -369,19 +388,16 @@ export class ItemsController {
 
   async listHierarchical(req: any, res: Response) {
     const { project_id } = req.query;
-    const projectAccessWhere =
-      req.user.role === 'ADMIN'
-        ? { id: String(project_id) }
-        : {
-            id: String(project_id),
-            OR: [
-              { owner_id: req.user.id },
-              { members: { some: { user_id: req.user.id } } },
-            ],
-          };
+    if (!project_id) {
+      return res.status(400).json({ error: 'project_id is required' });
+    }
 
-    const project = await prisma.project.findFirst({
-      where: projectAccessWhere,
+    if (!(await canViewProject(req.user.id, String(project_id)))) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: String(project_id) },
       select: { id: true },
     });
     if (!project) return res.status(404).json({ error: 'Project not found or access denied' });
@@ -449,24 +465,6 @@ export class ItemsController {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Fallback for legacy environments where projects exist but project_members is not populated.
-    if (req.user.role !== 'ADMIN' && projects.length === 0) {
-      projects = await prisma.project.findMany({
-        select: {
-          id: true,
-          name: true,
-          key_prefix: true,
-          description: true,
-          items: {
-            where: { type: { in: ['EPIC', 'STORY', 'TASK'] } },
-            include: backlogItemInclude,
-            orderBy: { createdAt: 'asc' },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
-
     const typeOrder = { EPIC: 0, STORY: 1, TASK: 2 };
     const sortItems = (a: any, b: any) => {
       const typeDiff = typeOrder[a.type as keyof typeof typeOrder] - typeOrder[b.type as keyof typeof typeOrder];
@@ -506,19 +504,15 @@ export class ItemsController {
     const { id } = req.params;
 
     const item = await prisma.item.findFirst({
-      where: {
-        id,
-        project: {
-          OR: [
-            { owner_id: req.user.id },
-            { members: { some: { user_id: req.user.id } } },
-          ],
-        },
-      },
+      where: { id },
       include: { _count: { select: { children: true } } },
     });
 
     if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    if (!(await canDeleteItem(req.user.id, item.project_id))) {
+      return res.status(403).json({ error: 'You do not have permission to delete items in this project' });
+    }
 
     if (item._count.children > 0) {
       return res.status(400).json({ error: 'Nao e possivel excluir um item que possui filhos vinculados.' });

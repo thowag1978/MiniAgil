@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { SprintStatus } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
+import { canCreateItem, canUpdateItem, canViewProject } from '../../services/permissions';
 
 function projectAccessWhere(userId: string, role?: string) {
   return role === 'ADMIN'
@@ -21,6 +22,7 @@ export class SprintsController {
       return res.status(400).json({ error: 'Name and project_id are required' });
     }
 
+    if (!(await canCreateItem(req.user.id, project_id))) {
     const project = await prisma.project.findFirst({
       where: { id: project_id, ...projectAccessWhere(req.user.id, req.user.role) }
     });
@@ -52,7 +54,12 @@ export class SprintsController {
        return res.status(400).json({ error: 'project_id query param is required' });
     }
 
+    if (!(await canViewProject(req.user.id, String(project_id)))) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
     const sprints = await prisma.sprint.findMany({
+      where: { project_id: String(project_id) },
       where: {
         project_id: String(project_id),
         project: projectAccessWhere(req.user.id, req.user.role)
@@ -73,6 +80,7 @@ export class SprintsController {
     }
 
     const sprint = await prisma.sprint.findFirst({
+      where: { id },
       where: { id, project: projectAccessWhere(req.user.id, req.user.role) },
       select: { id: true, project_id: true }
     });
@@ -81,6 +89,8 @@ export class SprintsController {
       return res.status(404).json({ error: 'Sprint not found or access denied' });
     }
 
+    if (!(await canUpdateItem(req.user.id, sprint.project_id))) {
+      return res.status(403).json({ error: 'You do not have permission to update sprints in this project' });
     if (normalizedStatus === 'ACTIVE') {
       const activeSprint = await prisma.sprint.findFirst({
         where: {

@@ -1,5 +1,5 @@
 ﻿'use client';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './backlog.module.css';
 import CreateItemModal from '../../../components/CreateItemModal';
@@ -27,13 +27,24 @@ export default function BacklogPage() {
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
 
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects,
     queryFn: () => projectsApi.list(),
   });
 
-  const selectedProjectId = projectsQuery.data?.[0]?.id || '';
+  useEffect(() => {
+    const projects = projectsQuery.data || [];
+    if (projects.length === 0) {
+      setSelectedProjectId('');
+      return;
+    }
+
+    if (!selectedProjectId || !projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projectsQuery.data, selectedProjectId]);
 
   const backlogQuery = useQuery({
     queryKey: queryKeys.backlogOverview(selectedProjectId || 'none'),
@@ -48,6 +59,8 @@ export default function BacklogPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.sprints(selectedProjectId) });
     },
   });
+
+  const selectedProject = projectsQuery.data?.find((project) => project.id === selectedProjectId);
 
   const filteredSprintItems = useMemo(() => {
     const list = backlogQuery.data?.sprintItems || [];
@@ -72,7 +85,7 @@ export default function BacklogPage() {
     </div>
   );
 
-  if (projectsQuery.isLoading || backlogQuery.isLoading) {
+  if (projectsQuery.isLoading || backlogQuery.isLoading || ((projectsQuery.data?.length || 0) > 0 && !selectedProjectId)) {
     return <div style={{ padding: 16 }}>Carregando backlog...</div>;
   }
 
@@ -91,6 +104,18 @@ export default function BacklogPage() {
       <div className={styles.dashHeader}>
         <h1>Backlog do Projeto</h1>
         <div className={styles.actionBar}>
+          <select
+            className={`input-glass ${styles.projectSelect}`}
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            aria-label="Selecionar projeto"
+          >
+            {(projectsQuery.data || []).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name} ({project.key_prefix})
+              </option>
+            ))}
+          </select>
           <input
             type="text"
             className="input-glass"
@@ -110,7 +135,7 @@ export default function BacklogPage() {
             <span className={styles.sprintDates}>
               {activeSprint?.startDate && activeSprint?.endDate
                 ? `${new Date(activeSprint.startDate).toLocaleDateString('pt-BR')} - ${new Date(activeSprint.endDate).toLocaleDateString('pt-BR')}`
-                : activeSprint ? 'Sem datas definidas' : 'Nenhuma sprint ativa'}
+                : activeSprint ? 'Sem datas definidas' : `${selectedProject?.name || 'Projeto'} sem sprint ativa`}
             </span>
           </div>
           <button

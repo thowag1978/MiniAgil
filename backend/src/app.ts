@@ -6,6 +6,7 @@ import { projectRoutes } from './modules/projects/projects.routes';
 import { sprintRoutes } from './modules/sprints/sprints.routes';
 import { itemRoutes } from './modules/items/items.routes';
 import { userRoutes } from './modules/users/users.routes';
+import { bugRoutes } from './modules/bugs/bugs.routes';
 
 export function createApp() {
   const app = express();
@@ -18,6 +19,7 @@ export function createApp() {
   app.use('/api/sprints', sprintRoutes);
   app.use('/api/items', itemRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/bugs', bugRoutes);
 
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });

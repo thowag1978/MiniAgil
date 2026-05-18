@@ -16,11 +16,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ownedProjects Project[]       @relation("ProjectOwner")
-  projects      ProjectMember[]
-  reportedItems Item[]          @relation("ReportedItems")
-  assignedItems Item[]          @relation("AssignedItems")
-  comments      Comment[]
+  ownedProjects    Project[]          @relation("ProjectOwner")
+  projects         ProjectMember[]
+  reportedItems    Item[]             @relation("ReportedItems")
+  assignedItems    Item[]             @relation("AssignedItems")
+  comments         Comment[]
+  reportedBugs     Bug[]              @relation("ReportedBugs")
+  assignedBugs     Bug[]              @relation("AssignedBugs")
+  bugComments      BugComment[]
+  bugAttachments   BugAttachment[]
+  bugStatusChanges BugStatusHistory[]
 
   @@map("users")
 }
@@ -107,18 +112,18 @@ model WorkflowStatus {
 }
 
 model Item {
-  id                 String   @id @default(uuid())
-  project_key        String   @unique
-  type               ItemType
-  title              String
-  description        String?  @db.Text
-  workflow_status_id String
-  priority           Priority @default(MEDIUM)
-  reporter_id        String
-  assignee_id        String?
-  project_id         String
-  sprint_id          String?
-  parent_id          String?
+  id                  String   @id @default(uuid())
+  project_key         String   @unique
+  type                ItemType
+  title               String
+  description         String?  @db.Text
+  workflow_status_id  String
+  priority            Priority @default(MEDIUM)
+  reporter_id         String
+  assignee_id         String?
+  project_id          String
+  sprint_id           String?
+  parent_id           String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   acceptance_criteria String?  @db.Text
@@ -184,4 +189,145 @@ model Attachment {
 
   @@index([item_id])
   @@map("attachments")
+}
+
+model BugSystem {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  features BugFeature[]
+  bugs     Bug[]
+
+  @@unique([name])
+  @@map("bug_systems")
+}
+
+model BugFeature {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  system_id   String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  system BugSystem @relation(fields: [system_id], references: [id])
+  bugs   Bug[]
+
+  @@unique([system_id, name])
+  @@index([system_id])
+  @@map("bug_features")
+}
+
+model Bug {
+  id               String      @id @default(uuid())
+  protocol         String      @unique
+  title            String
+  description      String?     @db.Text
+  stepsToReproduce String?     @db.Text
+  expectedResult   String?     @db.Text
+  actualResult     String?     @db.Text
+  environment      String?
+  browserDevice    String?
+  status           BugStatus   @default(OPEN)
+  severity         BugSeverity @default(MEDIUM)
+  priority         Priority    @default(MEDIUM)
+  system_id        String
+  feature_id       String?
+  reporter_id      String
+  assignee_id      String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+
+  system        BugSystem          @relation(fields: [system_id], references: [id])
+  feature       BugFeature?        @relation(fields: [feature_id], references: [id])
+  reporter      User               @relation("ReportedBugs", fields: [reporter_id], references: [id])
+  assignee      User?              @relation("AssignedBugs", fields: [assignee_id], references: [id])
+  comments      BugComment[]
+  attachments   BugAttachment[]
+  statusHistory BugStatusHistory[]
+
+  @@index([system_id])
+  @@index([feature_id])
+  @@index([reporter_id])
+  @@index([assignee_id])
+  @@index([status])
+  @@map("bugs")
+}
+
+model BugComment {
+  id        String   @id @default(uuid())
+  text      String   @db.Text
+  bug_id    String
+  user_id   String
+  createdAt DateTime @default(now())
+
+  bug  Bug  @relation(fields: [bug_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([bug_id])
+  @@index([user_id])
+  @@map("bug_comments")
+}
+
+model BugAttachment {
+  id        String   @id @default(uuid())
+  s3_url    String
+  fileName  String
+  mimeType  String?
+  fileSize  Int?
+  bug_id    String
+  user_id   String
+  createdAt DateTime @default(now())
+
+  bug  Bug  @relation(fields: [bug_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([bug_id])
+  @@index([user_id])
+  @@map("bug_attachments")
+}
+
+model BugStatusHistory {
+  id          String     @id @default(uuid())
+  bug_id      String
+  from_status BugStatus?
+  to_status   BugStatus
+  comment     String?    @db.Text
+  user_id     String
+  createdAt   DateTime   @default(now())
+
+  bug  Bug  @relation(fields: [bug_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([bug_id])
+  @@index([user_id])
+  @@map("bug_status_history")
+}
+
+enum BugStatus {
+  OPEN
+  TRIAGE
+  CONFIRMED
+  IN_FIX
+  WAITING_VALIDATION
+  RESOLVED
+  CLOSED
+  REOPENED
+  REJECTED
+  DUPLICATED
+  CANCELED
+}
+
+enum BugSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }

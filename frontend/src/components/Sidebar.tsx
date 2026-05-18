@@ -21,6 +21,15 @@ const adminNavItems = [
   { href: '/dashboard/users', label: 'Gestão de Usuários' },
 ];
 
+const bugsNavItems = [
+  { href: '/dashboard/bugs', label: 'Painel de Bugs', exact: true },
+  { href: '/dashboard/bugs/new', label: 'Novo Bug' },
+  { href: '/dashboard/bugs/list', label: 'Lista de Bugs' },
+  { href: '/dashboard/bugs/kanban', label: 'Kanban de Bugs' },
+  { href: '/dashboard/bugs/systems', label: 'Sistemas Monitorados' },
+  { href: '/dashboard/bugs/features', label: 'Funcionalidades' },
+];
+
 export default function Sidebar() {
   const pathname = usePathname();
   const queryClient = useQueryClient();
@@ -50,6 +59,14 @@ export default function Sidebar() {
           <div className={styles.navSection}>PRINCIPAL</div>
           {mainNavItems.map((item) => (
             <Link key={item.href} href={item.href} className={getNavClassName(item.href, item.exact)}>
+              {item.label}
+            </Link>
+          ))}
+
+          <div className={styles.navSection}>BUGS</div>
+          <div className={styles.navGroupTitle}>Bugs</div>
+          {bugsNavItems.map((item) => (
+            <Link key={item.href} href={item.href} className={`${getNavClassName(item.href, item.exact)} ${styles.subNavItem}`}>
               {item.label}
             </Link>
           ))}

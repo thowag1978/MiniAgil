@@ -101,3 +101,109 @@ export interface ProjectHierarchy {
   epics: Item[];
 }
 
+export interface BugSystem {
+  id: string;
+  name: string;
+  description?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BugFeature {
+  id: string;
+  name: string;
+  description?: string | null;
+  system_id: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  system?: Pick<BugSystem, 'id' | 'name' | 'active'>;
+}
+
+export type BugSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type BugStatus = 'OPEN' | 'TRIAGE' | 'CONFIRMED' | 'IN_FIX' | 'WAITING_VALIDATION' | 'RESOLVED' | 'CLOSED' | 'REOPENED' | 'REJECTED' | 'DUPLICATED' | 'CANCELED';
+
+export interface BugAttachment {
+  id: string;
+  s3_url: string;
+  fileName: string;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  bug_id: string;
+  user_id: string;
+  createdAt: string;
+  user?: Pick<AuthUser, 'id' | 'name' | 'email'>;
+}
+
+export interface BugComment {
+  id: string;
+  text: string;
+  bug_id: string;
+  user_id: string;
+  createdAt: string;
+  user?: Pick<AuthUser, 'id' | 'name' | 'email'>;
+}
+
+export interface BugStatusHistory {
+  id: string;
+  bug_id: string;
+  from_status?: BugStatus | null;
+  to_status: BugStatus;
+  comment?: string | null;
+  user_id: string;
+  createdAt: string;
+  user?: Pick<AuthUser, 'id' | 'name' | 'email'>;
+}
+
+export interface Bug {
+  id: string;
+  protocol: string;
+  title: string;
+  description?: string | null;
+  stepsToReproduce?: string | null;
+  expectedResult?: string | null;
+  actualResult?: string | null;
+  environment?: string | null;
+  browserDevice?: string | null;
+  status: BugStatus;
+  severity: BugSeverity;
+  priority: Priority;
+  system_id: string;
+  feature_id?: string | null;
+  reporter_id: string;
+  assignee_id?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string | null;
+  closedAt?: string | null;
+  system?: Pick<BugSystem, 'id' | 'name'>;
+  feature?: Pick<BugFeature, 'id' | 'name'> | null;
+  reporter?: Pick<AuthUser, 'id' | 'name' | 'email'>;
+  assignee?: Pick<AuthUser, 'id' | 'name' | 'email'> | null;
+  attachments?: BugAttachment[];
+  comments?: BugComment[];
+  statusHistory?: BugStatusHistory[];
+}
+
+export interface BugsDashboardMetrics {
+  totalOpen: number;
+  critical: number;
+  reopened: number;
+  averageResolutionHours: number | null;
+  bySystem: Array<{
+    system_id: string;
+    name: string;
+    total: number;
+  }>;
+  byStatus: Array<{
+    status: BugStatus;
+    total: number;
+  }>;
+  byAssignee: Array<{
+    assignee_id?: string | null;
+    name: string;
+    total: number;
+  }>;
+}
+

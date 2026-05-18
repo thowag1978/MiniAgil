@@ -12,5 +12,13 @@
   backlogOverview: (projectId: string) => ['items', 'backlog-overview', projectId] as const,
   sprints: (projectId: string) => ['sprints', projectId] as const,
   users: ['users'] as const,
+  bugSystems: ['bugs', 'systems'] as const,
+  activeBugSystems: ['bugs', 'systems', 'active'] as const,
+  bugFeatures: ['bugs', 'features'] as const,
+  activeBugFeatures: (systemId: string) => ['bugs', 'features', systemId, 'active'] as const,
+  bugsDashboard: ['bugs', 'dashboard'] as const,
+  bugs: (filterKey: string) => ['bugs', 'list', filterKey] as const,
+  bugsKanban: (filterKey: string) => ['bugs', 'kanban', filterKey] as const,
+  bug: (id: string) => ['bugs', id] as const,
 };
 

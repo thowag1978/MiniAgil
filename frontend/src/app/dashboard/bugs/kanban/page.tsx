@@ -21,8 +21,7 @@ type FilterState = {
 type KanbanColumn = {
   id: string;
   label: string;
-  targetStatus: BugStatus;
-  statuses: BugStatus[];
+  status: BugStatus;
 };
 
 const initialFilters: FilterState = {
@@ -35,30 +34,17 @@ const initialFilters: FilterState = {
 };
 
 const kanbanColumns: KanbanColumn[] = [
-  {
-    id: 'todo',
-    label: 'A Fazer',
-    targetStatus: 'OPEN',
-    statuses: ['OPEN', 'TRIAGE', 'CONFIRMED', 'REOPENED'],
-  },
-  {
-    id: 'in-progress',
-    label: 'Em Progresso',
-    targetStatus: 'IN_FIX',
-    statuses: ['IN_FIX'],
-  },
-  {
-    id: 'review',
-    label: 'Para Revisao',
-    targetStatus: 'WAITING_VALIDATION',
-    statuses: ['WAITING_VALIDATION', 'RESOLVED'],
-  },
-  {
-    id: 'done',
-    label: 'Concluido',
-    targetStatus: 'CLOSED',
-    statuses: ['CLOSED', 'REJECTED', 'DUPLICATED', 'CANCELED'],
-  },
+  { id: 'open', label: 'Aberto', status: 'OPEN' },
+  { id: 'triage', label: 'Em triagem', status: 'TRIAGE' },
+  { id: 'confirmed', label: 'Confirmado', status: 'CONFIRMED' },
+  { id: 'in-fix', label: 'Em correcao', status: 'IN_FIX' },
+  { id: 'waiting-validation', label: 'Aguardando validacao', status: 'WAITING_VALIDATION' },
+  { id: 'resolved', label: 'Resolvido', status: 'RESOLVED' },
+  { id: 'closed', label: 'Fechado', status: 'CLOSED' },
+  { id: 'reopened', label: 'Reaberto', status: 'REOPENED' },
+  { id: 'rejected', label: 'Rejeitado', status: 'REJECTED' },
+  { id: 'duplicated', label: 'Duplicado', status: 'DUPLICATED' },
+  { id: 'canceled', label: 'Cancelado', status: 'CANCELED' },
 ];
 
 const levelLabels: Record<Priority, string> = {
@@ -149,7 +135,7 @@ export default function BugsKanbanPage() {
     const bug = bugs.find((item) => item.id === draggedBugId);
     setDraggedBugId(null);
     setOverColumnId(null);
-    const targetStatus = column.targetStatus;
+    const targetStatus = column.status;
     if (!bug || bug.status === targetStatus) return;
 
     if (targetStatus === 'IN_FIX' && !bug.assignee_id) {
@@ -194,7 +180,7 @@ export default function BugsKanbanPage() {
   );
 
   const renderColumn = (column: KanbanColumn) => {
-    const columnBugs = bugs.filter((bug) => column.statuses.includes(bug.status)).sort(sortBugs);
+    const columnBugs = bugs.filter((bug) => bug.status === column.status).sort(sortBugs);
     return (
       <section
         key={column.id}

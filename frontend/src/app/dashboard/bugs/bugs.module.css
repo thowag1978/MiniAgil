@@ -109,7 +109,7 @@
 .kanbanWrapper {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 128px);
+  min-height: calc(100vh - 128px);
 }
 
 .kanbanColumns {
@@ -117,17 +117,40 @@
   gap: 16px;
   flex: 1;
   overflow-x: auto;
-  padding-bottom: 12px;
+  overflow-y: hidden;
+  padding-bottom: 18px;
+  scrollbar-color: rgba(92, 111, 255, 0.7) rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
+  width: 100%;
+}
+
+.kanbanColumns::-webkit-scrollbar {
+  height: 12px;
+}
+
+.kanbanColumns::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.kanbanColumns::-webkit-scrollbar-thumb {
+  background: rgba(92, 111, 255, 0.75);
+  border-radius: 999px;
+}
+
+.kanbanColumns::-webkit-scrollbar-thumb:hover {
+  background: rgba(92, 111, 255, 0.95);
 }
 
 .kanbanColumn {
-  flex: 0 0 300px;
+  flex: 1 0 240px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
   display: flex;
   flex-direction: column;
   min-height: 420px;
+  max-height: calc(100vh - 360px);
 }
 
 .kanbanColumnOver {

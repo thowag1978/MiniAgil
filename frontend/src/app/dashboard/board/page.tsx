@@ -1,26 +1,46 @@
-﻿'use client';
-import React, { useState } from 'react';
+'use client';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './board.module.css';
 import IssueModal from '../../../components/IssueModal';
 import CreateItemModal from '../../../components/CreateItemModal';
 import { itemsApi } from '@/lib/api/items';
+import { projectsApi } from '@/lib/api/projects';
 import { queryKeys } from '@/lib/query/keys';
 import type { Item } from '@/lib/types';
 
 export default function KanbanBoard() {
   const queryClient = useQueryClient();
-  const boardItemsKey = queryKeys.itemsByFilter('kanban:tasks');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Item | null>(null);
 
-  const itemsQuery = useQuery({
-    queryKey: boardItemsKey,
-    queryFn: () => itemsApi.list({ type: 'TASK' }),
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => projectsApi.list(),
   });
 
-  const items = itemsQuery.data || [];
+  useEffect(() => {
+    const projects = projectsQuery.data || [];
+    if (projects.length === 0) {
+      setSelectedProjectId('');
+      return;
+    }
+    if (!selectedProjectId || !projects.some((p) => p.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projectsQuery.data, selectedProjectId]);
+
+  const boardItemsKey = queryKeys.backlogOverview(selectedProjectId || 'none');
+
+  const backlogQuery = useQuery({
+    queryKey: boardItemsKey,
+    queryFn: () => itemsApi.backlogOverview(selectedProjectId),
+    enabled: Boolean(selectedProjectId),
+  });
+
+  const items = backlogQuery.data?.sprintItems || [];
 
   const openIssue = (issue: Item) => {
     setSelectedIssue(issue);
@@ -74,17 +94,44 @@ export default function KanbanBoard() {
   return (
     <div className={`animate-fade-in ${styles.boardWrapper}`}>
       <div className={styles.boardHeader}>
-        <h1>Kanban do Projeto</h1>
-        <div className={styles.filters}>
-          <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Tarefa</button>
+        <div>
+          <h1>Kanban do Projeto</h1>
+          {backlogQuery.data?.activeSprint && (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: 5 }}>
+              Sprint Ativa: <strong>{backlogQuery.data.activeSprint.name}</strong>
+            </p>
+          )}
+        </div>
+        <div className={styles.filters} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <select
+            className="input-glass"
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}
+            aria-label="Selecionar projeto"
+          >
+            {(projectsQuery.data || []).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name} ({project.key_prefix})
+              </option>
+            ))}
+          </select>
+          <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Item</button>
           <button className={styles.filterChip} onClick={() => queryClient.invalidateQueries({ queryKey: boardItemsKey })}>Refresh</button>
         </div>
       </div>
 
-      {itemsQuery.isLoading ? (
+      {projectsQuery.isLoading || backlogQuery.isLoading ? (
         <div style={{ padding: 20 }}>Carregando tarefas...</div>
-      ) : itemsQuery.isError ? (
+      ) : projectsQuery.isError || backlogQuery.isError ? (
         <div style={{ padding: 20, color: '#ff6b6b' }}>Falha ao carregar tarefas.</div>
+      ) : !selectedProjectId ? (
+        <div style={{ padding: 20, color: 'var(--text-dim)' }}>Crie um projeto primeiro.</div>
+      ) : !backlogQuery.data?.activeSprint ? (
+        <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-dim)' }}>
+          <h3>Nenhuma Sprint Ativa</h3>
+          <p style={{ marginTop: 10 }}>Inicie uma sprint na página de Sprints para visualizar o quadro Kanban deste projeto.</p>
+        </div>
       ) : (
         <div className={styles.boardColumns}>
           {renderColumn('A Fazer', aFazerItems)}

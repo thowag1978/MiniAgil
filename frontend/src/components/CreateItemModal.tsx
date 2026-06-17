@@ -166,6 +166,15 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
       return;
     }
 
+    if (itemForm.type === 'STORY' && (!itemForm.parent_id || potentialParents.length === 0)) {
+      alert('Não é possível criar esta História de Usuário. Ela precisa de um Épico Pai associado. Por favor, crie um Épico primeiro neste projeto.');
+      return;
+    }
+    if (itemForm.type === 'TASK' && (!itemForm.parent_id || potentialParents.length === 0)) {
+      alert('Não é possível criar esta Tarefa. Ela precisa de uma História Pai associada. Por favor, crie uma História primeiro neste projeto.');
+      return;
+    }
+
     const payload: CreateItemInput = {
       type: itemForm.type,
       title: itemForm.title,
@@ -306,7 +315,7 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
                 {parentType && potentialParents.length > 0 && (
                   <div>
                     <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-                      {itemForm.type === 'STORY' ? 'Épico Pai' : 'História Pai'}
+                      {itemForm.type === 'STORY' ? 'Épico Pai *' : itemForm.type === 'TASK' ? 'História Pai *' : 'História Pai'}
                     </label>
                     <select
                       className="input-glass"
@@ -314,11 +323,18 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
                       onChange={(e) => setItemForm((prev) => ({ ...prev, parent_id: e.target.value }))}
                       style={{ width: '100%' }}
                     >
-                      <option value="">Nenhum (item solto)</option>
+                      <option value="">{itemForm.type === 'BUG' ? 'Nenhum (opcional)' : 'Selecione um item pai...'}</option>
                       {potentialParents.map((p) => (
                         <option key={p.id} value={p.id}>{p.project_key} - {p.title}</option>
                       ))}
                     </select>
+                  </div>
+                )}
+
+                {parentType && potentialParents.length === 0 && (
+                  <div style={{ padding: '8px 12px', backgroundColor: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', borderRadius: '6px', color: '#ff6b6b', fontSize: '0.85rem' }}>
+                    ⚠️ Este projeto não possui {itemForm.type === 'STORY' ? 'Épicos' : 'Histórias de Usuário'} cadastrados.
+                    Crie um {itemForm.type === 'STORY' ? 'Épico' : 'História de Usuário'} primeiro para poder vincular este item.
                   </div>
                 )}
 

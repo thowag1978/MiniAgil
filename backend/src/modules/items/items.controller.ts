@@ -226,7 +226,7 @@ export class ItemsController {
   async dashboardMetrics(req: any, res: Response) {
     const myItems = await prisma.item.findMany({
       where: {
-        type: 'TASK',
+        type: { in: ['TASK', 'BUG'] },
         project: {
           OR: [
             { owner_id: req.user.id },
@@ -257,7 +257,7 @@ export class ItemsController {
 
     const itemsByProject = projectIds.length > 0
       ? await prisma.item.findMany({
-          where: { project_id: { in: projectIds }, type: 'TASK' },
+          where: { project_id: { in: projectIds }, type: { in: ['TASK', 'BUG'] } },
           select: { project_id: true, workflow_status: { select: { name: true } } },
         })
       : [];
@@ -338,16 +338,27 @@ export class ItemsController {
       orderBy: { createdAt: 'desc' },
     });
 
+    const itemInclude = {
+      assignee: { select: { name: true, email: true } },
+      reporter: { select: { name: true } },
+      project: { select: { id: true, name: true, key_prefix: true } },
+      sprint: { select: { id: true, name: true, status: true } },
+      workflow_status: true,
+      parent: { select: { id: true, title: true, project_key: true, type: true } },
+      children: { select: { id: true, title: true, project_key: true, type: true, workflow_status: true } },
+    };
+
     const sprintItems = activeSprint?.id
       ? await prisma.item.findMany({
           where: {
             project_id: project.id,
-            sprint_id: activeSprint.id,
-            type: 'TASK',
+            type: { in: ['TASK', 'BUG'] },
+            OR: [
+              { sprint_id: activeSprint.id },
+              { parent: { sprint_id: activeSprint.id } }
+            ]
           },
-          include: {
-            workflow_status: true,
-          },
+          include: itemInclude,
           orderBy: { createdAt: 'asc' },
         })
       : [];
@@ -355,12 +366,14 @@ export class ItemsController {
     const backlogItems = await prisma.item.findMany({
       where: {
         project_id: project.id,
+        type: { in: ['TASK', 'BUG'] },
         sprint_id: null,
-        type: 'TASK',
+        OR: [
+          { parent_id: null },
+          { parent: { sprint_id: null } }
+        ]
       },
-      include: {
-        workflow_status: true,
-      },
+      include: itemInclude,
       orderBy: { createdAt: 'asc' },
     });
 

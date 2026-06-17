@@ -271,8 +271,8 @@ export default function HierarchicalBacklog() {
           <option value="">Todos Status</option>
           <option value="A FAZER">A FAZER</option>
           <option value="EM PROGRESSO">EM PROGRESSO</option>
-          <option value="CONCLUIDO">CONCLUIDO</option>
-          <option value="CONCLUÍDO">CONCLUIDO</option>
+          <option value="PARA REVISÃO">PARA REVISÃO</option>
+          <option value="CONCLUÍDO">CONCLUÍDO</option>
         </select>
       </div>
 

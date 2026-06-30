@@ -1,0 +1,87 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: miniagil-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: miniagil
+      MYSQL_USER: miniagil
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - miniagil_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: miniagil-redis
+    restart: unless-stopped
+    volumes:
+      - miniagil_redis_data:/data
+    networks:
+      - internal
+
+  minio:
+    image: minio/minio:latest
+    container_name: miniagil-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    command: server /data
+    volumes:
+      - miniagil_minio_data:/data
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./backend
+    container_name: miniagil-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://miniagil:${MYSQL_PASSWORD}@db:3306/miniagil
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      API_PORT: "4000"
+      FRONTEND_URL: https://miniagil.mercurytech.com.br
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+      - proxy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: https://miniagil.mercurytech.com.br
+    container_name: miniagil-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - proxy
+
+volumes:
+  miniagil_db_data:
+  miniagil_redis_data:
+  miniagil_minio_data:
+
+networks:
+  internal:
+    name: miniagil-internal
+  proxy:
+    external: true
+    name: supremostec-network

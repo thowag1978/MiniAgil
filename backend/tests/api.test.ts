@@ -15,6 +15,7 @@ const { prismaMock } = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      count: vi.fn(),
     },
     project: {
       findFirst: vi.fn(),
@@ -22,6 +23,7 @@ const { prismaMock } = vi.hoisted(() => ({
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      count: vi.fn(),
     },
     projectMember: {
       findFirst: vi.fn(),
@@ -31,6 +33,21 @@ const { prismaMock } = vi.hoisted(() => ({
       update: vi.fn(),
       delete: vi.fn(),
       count: vi.fn(),
+    },
+    team: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      count: vi.fn(),
+    },
+    teamMember: {
+      deleteMany: vi.fn(),
+    },
+    teamProject: {
+      findFirst: vi.fn(),
+      deleteMany: vi.fn(),
     },
     item: {
       findMany: vi.fn(),
@@ -206,6 +223,82 @@ describe('API critical paths', () => {
 
     expect(res.status).toBe(200);
     expect(res.body[0].email).toBe('ana@miniagil.com');
+  });
+
+  it('uses the current database role to give an admin global project access', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'ADMIN' });
+    prismaMock.project.findMany.mockResolvedValueOnce([]);
+
+    const res = await request(app)
+      .get('/api/projects')
+      .set('Authorization', `Bearer ${makeToken('USER')}`);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} })
+    );
+  });
+
+  it('removes global project access immediately after an admin is demoted', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' });
+    prismaMock.project.findMany.mockResolvedValueOnce([]);
+
+    const res = await request(app)
+      .get('/api/projects')
+      .set('Authorization', `Bearer ${makeToken('ADMIN')}`);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { owner_id: 'user-1' },
+            { members: { some: { user_id: 'user-1' } } },
+            { teams: { some: { team: { members: { some: { user_id: 'user-1' } } } } } },
+          ],
+        },
+      })
+    );
+  });
+
+  it('uses global project access in admin dashboard metrics', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'ADMIN' });
+    prismaMock.item.findMany.mockResolvedValueOnce([]);
+    prismaMock.project.findMany.mockResolvedValueOnce([]);
+
+    const res = await request(app)
+      .get('/api/items/dashboard-metrics')
+      .set('Authorization', `Bearer ${makeToken('USER')}`);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} })
+    );
+  });
+
+  it('creates a team with users and projects as admin', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'ADMIN' });
+    prismaMock.user.count.mockResolvedValueOnce(1);
+    prismaMock.project.count.mockResolvedValueOnce(1);
+    prismaMock.team.create.mockResolvedValueOnce({
+      id: 'team-1',
+      name: 'Produto',
+      members: [{ user: { id: 'user-2', name: 'Ana' } }],
+      projects: [{ project: { id: 'project-1', name: 'MiniAgil', key_prefix: 'MINI' } }],
+    });
+
+    const res = await request(app)
+      .post('/api/teams')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({
+        name: 'Produto',
+        user_ids: ['user-2'],
+        project_ids: ['project-1'],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('Produto');
+    expect(prismaMock.team.create).toHaveBeenCalled();
   });
 
   it('e2e: login then fetch items', async () => {

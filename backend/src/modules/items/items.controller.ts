@@ -1,7 +1,13 @@
 import { Request, Response } from 'express';
 import { ItemType, Prisma } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
-import { canCreateItem, canDeleteItem, canUpdateItem, canViewProject } from '../../services/permissions';
+import {
+  canCreateItem,
+  canDeleteItem,
+  canUpdateItem,
+  canViewProject,
+  getProjectAccessWhere,
+} from '../../services/permissions';
 
 type LockedProjectCounter = {
   id: string;
@@ -112,16 +118,8 @@ export class ItemsController {
 
   async list(req: any, res: Response) {
     const { project_id, sprint_id, type } = req.query;
-    const where: Prisma.ItemWhereInput = req.user.role === 'ADMIN'
-      ? {}
-      : {
-          project: {
-            OR: [
-              { owner_id: req.user.id },
-              { members: { some: { user_id: req.user.id } } },
-            ],
-          },
-        };
+    const projectAccessWhere = await getProjectAccessWhere(req.user.id);
+    const where: Prisma.ItemWhereInput = { project: projectAccessWhere };
 
     if (project_id) {
       const projectId = String(project_id);
@@ -224,15 +222,11 @@ export class ItemsController {
   }
 
   async dashboardMetrics(req: any, res: Response) {
+    const projectAccessWhere = await getProjectAccessWhere(req.user.id);
     const myItems = await prisma.item.findMany({
       where: {
         type: { in: ['TASK', 'BUG'] },
-        project: {
-          OR: [
-            { owner_id: req.user.id },
-            { members: { some: { user_id: req.user.id } } },
-          ],
-        },
+        project: projectAccessWhere,
         OR: [{ assignee_id: req.user.id }, { reporter_id: req.user.id }],
       },
       include: {
@@ -243,12 +237,7 @@ export class ItemsController {
     });
 
     const projects = await prisma.project.findMany({
-      where: {
-        OR: [
-          { owner_id: req.user.id },
-          { members: { some: { user_id: req.user.id } } },
-        ],
-      },
+      where: projectAccessWhere,
       select: { id: true, name: true, key_prefix: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -438,15 +427,7 @@ export class ItemsController {
       workflow_status: true,
     } satisfies Prisma.ItemInclude;
 
-    const projectAccessWhere =
-      req.user.role === 'ADMIN'
-        ? {}
-        : {
-            OR: [
-              { owner_id: req.user.id },
-              { members: { some: { user_id: req.user.id } } },
-            ],
-          };
+    const projectAccessWhere = await getProjectAccessWhere(req.user.id);
 
     let projects = await prisma.project.findMany({
       where: projectAccessWhere,

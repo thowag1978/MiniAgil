@@ -21,6 +21,7 @@ model User {
   reportedItems Item[]          @relation("ReportedItems")
   assignedItems Item[]          @relation("AssignedItems")
   comments      Comment[]
+  teams         TeamMember[]
 
   @@map("users")
 }
@@ -44,9 +45,53 @@ model Project {
   members ProjectMember[]
   sprints Sprint[]
   items   Item[]
+  teams   TeamProject[]
 
   @@index([owner_id])
   @@map("projects")
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members  TeamMember[]
+  projects TeamProject[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  team_id   String
+  user_id   String
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_id, user_id])
+  @@index([team_id])
+  @@index([user_id])
+  @@map("team_members")
+}
+
+model TeamProject {
+  id         String   @id @default(uuid())
+  team_id    String
+  project_id String
+  createdAt  DateTime @default(now())
+
+  team    Team    @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_id, project_id])
+  @@index([team_id])
+  @@index([project_id])
+  @@map("team_projects")
 }
 
 model ProjectMember {

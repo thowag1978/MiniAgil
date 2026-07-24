@@ -12,5 +12,6 @@
   backlogOverview: (projectId: string) => ['items', 'backlog-overview', projectId] as const,
   sprints: (projectId: string) => ['sprints', projectId] as const,
   users: ['users'] as const,
+  teams: ['teams'] as const,
 };
 

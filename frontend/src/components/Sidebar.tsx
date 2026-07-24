@@ -19,6 +19,7 @@ const mainNavItems = [
 
 const adminNavItems = [
   { href: '/dashboard/users', label: 'Gestão de Usuários' },
+  { href: '/dashboard/teams', label: 'Equipes' },
 ];
 
 export default function Sidebar() {

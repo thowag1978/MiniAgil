@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../infrastructure/db';
-import { canViewProject, isProjectOwnerOrAdmin } from '../../services/permissions';
+import { canViewProject, getProjectAccessWhere, isProjectOwnerOrAdmin } from '../../services/permissions';
 
 const projectResponseSelect = {
   id: true,
@@ -45,15 +45,9 @@ export class ProjectsController {
   }
 
   async list(req: any, res: Response) {
+    const projectAccessWhere = await getProjectAccessWhere(req.user.id);
     const projects = await prisma.project.findMany({
-      where: req.user.role === 'ADMIN'
-        ? {}
-        : {
-            OR: [
-              { owner_id: req.user.id },
-              { members: { some: { user_id: req.user.id } } }
-            ],
-          },
+      where: projectAccessWhere,
       select: {
         ...projectResponseSelect,
         members: {

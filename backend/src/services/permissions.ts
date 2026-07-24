@@ -1,10 +1,33 @@
-import { ProjectRole, Role } from '@prisma/client';
+import { Prisma, ProjectRole, Role } from '@prisma/client';
 import { prisma } from '../infrastructure/db';
 
 export type ProjectAccessRole = ProjectRole | 'GLOBAL_ADMIN' | null;
 
 const editableProjectRoles: ProjectRole[] = [ProjectRole.OWNER, ProjectRole.ADMIN, ProjectRole.MEMBER];
 const managerProjectRoles: ProjectRole[] = [ProjectRole.OWNER, ProjectRole.ADMIN];
+
+export async function getProjectAccessWhere(userId: string): Promise<Prisma.ProjectWhereInput> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+
+  if (!user) {
+    return { id: { in: [] } };
+  }
+
+  if (user.role === Role.ADMIN) {
+    return {};
+  }
+
+  return {
+    OR: [
+      { owner_id: userId },
+      { members: { some: { user_id: userId } } },
+      { teams: { some: { team: { members: { some: { user_id: userId } } } } } },
+    ],
+  };
+}
 
 export async function getProjectRole(userId: string, projectId: string): Promise<ProjectAccessRole> {
   const user = await prisma.user.findUnique({
@@ -24,6 +47,16 @@ export async function getProjectRole(userId: string, projectId: string): Promise
   });
 
   if (membership) return membership.role;
+
+  const teamAccess = await prisma.teamProject.findFirst({
+    where: {
+      project_id: projectId,
+      team: { members: { some: { user_id: userId } } },
+    },
+    select: { id: true },
+  });
+
+  if (teamAccess) return ProjectRole.MEMBER;
 
   const ownedProject = await prisma.project.findFirst({
     where: {

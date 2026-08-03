@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 process.env.JWT_SECRET = 'test-secret';
+process.env.WEBHOOK_ENCRYPTION_KEY = 'test-webhook-encryption-key';
 process.env.ATTACHMENT_MAX_SIZE_BYTES = '16';
 process.env.MINIO_ACCESS_KEY = 'test-access';
 process.env.MINIO_SECRET_KEY = 'test-secret';
@@ -106,6 +107,9 @@ const { prismaMock } = vi.hoisted(() => ({
     webhookDelivery: {
       findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(),
     },
+    domainEventOutbox: {
+      findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(),
+    },
     projectRepository: {
       findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(),
     },
@@ -199,7 +203,7 @@ describe('API critical paths', () => {
   beforeAll(async () => {
     const { createApp } = await import('../src/app');
     app = createApp();
-  });
+  }, 30_000);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -221,6 +225,7 @@ describe('API critical paths', () => {
     prismaMock.item.findMany.mockResolvedValue([]);
     prismaMock.sprintScopeChange.findMany.mockResolvedValue([]);
     prismaMock.sprintSnapshot.upsert.mockResolvedValue({ id: 'snapshot-1' });
+    prismaMock.domainEventOutbox.create.mockResolvedValue({ id: 'event-1' });
     storageMock.upload.mockResolvedValue({ bucket: 'private-attachments', objectKey: 'items/item-1/random.txt' });
     storageMock.remove.mockResolvedValue(undefined);
     storageMock.createSignedDownloadUrl.mockResolvedValue('http://minio/signed-download');
@@ -1521,7 +1526,7 @@ describe('API critical paths', () => {
     prismaMock.project.findUnique.mockResolvedValueOnce({ id: 'project-1', name: 'MiniAgil', key_prefix: 'MINI' });
     prismaMock.item.count
       .mockResolvedValueOnce(20).mockResolvedValueOnce(7).mockResolvedValueOnce(5).mockResolvedValueOnce(3)
-      .mockResolvedValueOnce(4).mockResolvedValueOnce(2).mockResolvedValueOnce(1);
+      .mockResolvedValueOnce(3).mockResolvedValueOnce(4).mockResolvedValueOnce(2).mockResolvedValueOnce(1);
     prismaMock.sprint.findFirst.mockResolvedValueOnce({ id: 'sprint-1', name: 'Sprint atual', initial_scope_points: 13, items: [{ story_points: 8, workflow_status: { category: 'DONE' } }, { story_points: 5, workflow_status: { category: 'IN_PROGRESS' } }] });
     prismaMock.item.findMany.mockResolvedValueOnce([{ id: 'epic-1', project_key: 'MINI-1', title: 'Portal', children: [
       { workflow_status: { category: 'DONE' } }, { workflow_status: { category: 'IN_PROGRESS' } },
@@ -1532,7 +1537,7 @@ describe('API critical paths', () => {
       .set('Authorization', `Bearer ${makeToken('USER')}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.metrics).toEqual(expect.objectContaining({ totalItems: 20, completedItems: 7, inProgressItems: 5, openBugs: 4, criticalBugs: 2, reopenedBugs: 1 }));
+    expect(res.body.metrics).toEqual(expect.objectContaining({ totalItems: 20, completedItems: 7, inProgressItems: 5, overdueItems: { value: 3, supported: true }, openBugs: 4, criticalBugs: 2, reopenedBugs: 1 }));
     expect(res.body.currentSprint).toEqual(expect.objectContaining({ plannedPoints: 13, completedPoints: 8 }));
     expect(res.body.epicProgress[0].percentage).toBe(50);
     expect(prismaMock.item.count).toHaveBeenCalledWith({ where: expect.objectContaining({ workflow_status: { category: 'DONE' } }) });

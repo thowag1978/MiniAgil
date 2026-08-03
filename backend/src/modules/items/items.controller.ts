@@ -17,7 +17,7 @@ import { InvalidBugDetailsError, parseBugDetails } from '../../services/bugDetai
 import { applyCustomFieldValues, customFieldValueInclude } from '../../services/customFields';
 import { BacklogOrderError, moveBacklogItem } from '../../services/backlogOrder';
 import { getProjectDashboard, parseProjectDashboardFilters, ProjectDashboardError } from '../../services/projectDashboard';
-import { publishDomainEvent } from '../../infrastructure/domainEvents';
+import { publishDomainEvent } from '../../services/domainEventOutbox';
 
 type LockedProjectCounter = {
   id: string;
@@ -73,6 +73,7 @@ export class ItemsController {
       bug_details,
       custom_fields,
       story_points,
+      due_date,
     } = req.body;
 
     if (!type || !title || !project_id || !workflow_status_id) {
@@ -99,6 +100,10 @@ export class ItemsController {
     if (story_points !== undefined && story_points !== null && !storyPointScale.includes(Number(story_points))) return res.status(400).json({ error: 'story_points must use the scale 1, 2, 3, 5, 8, 13, 20' });
     if (itemType !== ItemType.BUG && bug_details !== undefined) {
       return res.status(400).json({ error: 'Only BUG items can have bug_details' });
+    }
+
+    if (due_date && Number.isNaN(new Date(String(due_date)).getTime())) {
+      return res.status(400).json({ error: 'due_date must be a valid date' });
     }
     let parsedBugDetails;
     try { parsedBugDetails = itemType === ItemType.BUG ? parseBugDetails(bug_details) : undefined; }
@@ -156,6 +161,7 @@ export class ItemsController {
           acceptance_criteria,
           estimate: estimate ? parseInt(estimate, 10) : null,
           story_points: story_points === undefined || story_points === null ? null : Number(story_points),
+          due_date: due_date ? new Date(String(due_date)) : null,
           ...(parsedBugDetails ? { bug_details: { create: parsedBugDetails } } : {}),
         },
         include: { bug_details: true, ...customFieldValueInclude },
@@ -258,7 +264,7 @@ export class ItemsController {
 
   async updateField(req: any, res: Response) {
     const { id } = req.params;
-    const { workflow_status_id, assignee_id, sprint_id, priority, title, description, parent_id, acceptance_criteria, estimate, story_points, transition_comment, bug_details, custom_fields } = req.body;
+    const { workflow_status_id, assignee_id, sprint_id, priority, title, description, parent_id, acceptance_criteria, estimate, story_points, due_date, transition_comment, bug_details, custom_fields } = req.body;
 
     const existingItem = await prisma.item.findFirst({
       where: { id },
@@ -358,6 +364,11 @@ export class ItemsController {
     if (parent_id !== undefined) data.parent_id = parent_id;
     if (acceptance_criteria !== undefined) data.acceptance_criteria = acceptance_criteria;
     if (estimate !== undefined) data.estimate = estimate ? parseInt(estimate, 10) : null;
+    if (due_date !== undefined) {
+      const parsedDueDate = due_date === null || due_date === '' ? null : new Date(String(due_date));
+      if (parsedDueDate && Number.isNaN(parsedDueDate.getTime())) return res.status(400).json({ error: 'due_date must be a valid date' });
+      data.due_date = parsedDueDate;
+    }
     if (story_points !== undefined) {
       if (existingItem.type !== ItemType.STORY) return res.status(400).json({ error: 'story_points are only allowed for STORY items' });
       if (story_points !== null && ![1, 2, 3, 5, 8, 13, 20].includes(Number(story_points))) return res.status(400).json({ error: 'story_points must use the scale 1, 2, 3, 5, 8, 13, 20' });

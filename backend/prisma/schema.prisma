@@ -252,6 +252,32 @@ enum WebhookDeliveryStatus {
   FAILED
 }
 
+enum DomainEventOutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  RETRYING
+  FAILED
+}
+
+model DomainEventOutbox {
+  id                  String                  @id @default(uuid())
+  event_id            String                  @unique
+  event_type          String
+  payload             Json
+  status              DomainEventOutboxStatus @default(PENDING)
+  attempt_count       Int                     @default(0)
+  nextAttemptAt       DateTime?
+  processingStartedAt DateTime?
+  publishedAt         DateTime?
+  last_error          String?                 @db.Text
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@map("domain_event_outbox")
+}
+
 model Webhook {
   id               String            @id @default(uuid())
   project_id       String
@@ -271,21 +297,22 @@ model Webhook {
 }
 
 model WebhookDelivery {
-  id              String                @id @default(uuid())
-  webhook_id      String
-  event_id        String
-  event_type      String
-  payload         Json
-  status          WebhookDeliveryStatus @default(PENDING)
-  attempt_count   Int                   @default(0)
-  response_status Int?
-  response_body   String?               @db.Text
-  last_error      String?               @db.Text
-  nextAttemptAt   DateTime?
-  deliveredAt     DateTime?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  webhook         Webhook               @relation(fields: [webhook_id], references: [id], onDelete: Cascade)
+  id                  String                @id @default(uuid())
+  webhook_id          String
+  event_id            String
+  event_type          String
+  payload             Json
+  status              WebhookDeliveryStatus @default(PENDING)
+  attempt_count       Int                   @default(0)
+  response_status     Int?
+  response_body       String?               @db.Text
+  last_error          String?               @db.Text
+  nextAttemptAt       DateTime?
+  deliveredAt         DateTime?
+  processingStartedAt DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  webhook             Webhook               @relation(fields: [webhook_id], references: [id], onDelete: Cascade)
 
   @@unique([webhook_id, event_id])
   @@index([status, nextAttemptAt])
@@ -410,25 +437,26 @@ model WorkflowTransition {
 }
 
 model Item {
-  id                  String   @id @default(uuid())
-  project_key         String   @unique
+  id                  String    @id @default(uuid())
+  project_key         String    @unique
   type                ItemType
   title               String
-  description         String?  @db.Text
+  description         String?   @db.Text
   workflow_status_id  String
-  priority            Priority @default(MEDIUM)
+  priority            Priority  @default(MEDIUM)
   reporter_id         String
   assignee_id         String?
   project_id          String
   sprint_id           String?
   parent_id           String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  acceptance_criteria String?  @db.Text
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  acceptance_criteria String?   @db.Text
   estimate            Int?
-  board_position      Float    @default(0)
-  backlog_position    Float    @default(0)
+  board_position      Float     @default(0)
+  backlog_position    Float     @default(0)
   story_points        Int?
+  due_date            DateTime?
 
   reporter             User                @relation("ReportedItems", fields: [reporter_id], references: [id])
   assignee             User?               @relation("AssignedItems", fields: [assignee_id], references: [id])
@@ -450,6 +478,7 @@ model Item {
 
   @@index([workflow_status_id])
   @@index([workflow_status_id, board_position])
+  @@index([project_id, due_date])
   @@index([project_id, backlog_position])
   @@index([reporter_id])
   @@index([assignee_id])

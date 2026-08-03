@@ -15,6 +15,7 @@ export interface CreateItemInput {
   assignee_id?: string | null;
   acceptance_criteria?: string;
   estimate?: string | number | null;
+  due_date?: string | null;
   story_points?: number | null;
   bug_details?: BugDetailsInput;
   custom_fields?: Record<string, CustomFieldInputValue>;
@@ -30,6 +31,7 @@ export interface UpdateItemInput {
   parent_id?: string | null;
   acceptance_criteria?: string;
   estimate?: string | number | null;
+  due_date?: string | null;
   story_points?: number | null;
   transition_comment?: string;
   bug_details?: BugDetailsInput;

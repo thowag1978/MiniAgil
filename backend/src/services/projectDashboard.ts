@@ -45,11 +45,12 @@ export async function getProjectDashboard(filters: ProjectDashboardFilters) {
   const bugBase: Prisma.ItemWhereInput = { ...baseWhere, type: filters.type && filters.type !== 'BUG' ? { in: [] } : 'BUG' };
   const bugOpen: Prisma.ItemWhereInput = { ...bugBase, workflow_status: { category: { notIn: ['DONE', 'CANCELLED'] } } };
 
-  const [project, total, completed, inProgress, unassigned, bugsOpen, criticalBugs, reopenedBugs, activeSprint, epics] = await Promise.all([
+  const [project, total, completed, inProgress, overdue, unassigned, bugsOpen, criticalBugs, reopenedBugs, activeSprint, epics] = await Promise.all([
     prisma.project.findUnique({ where: { id: filters.projectId }, select: { id: true, name: true, key_prefix: true } }),
     prisma.item.count({ where: baseWhere }),
     prisma.item.count({ where: { ...baseWhere, workflow_status: { category: 'DONE' } } }),
     prisma.item.count({ where: { ...baseWhere, workflow_status: { category: { in: ['IN_PROGRESS', 'REVIEW'] } } } }),
+    prisma.item.count({ where: { ...openWhere, due_date: { lt: new Date() } } }),
     prisma.item.count({ where: { ...openWhere, assignee_id: null } }),
     prisma.item.count({ where: bugOpen }),
     prisma.item.count({ where: { ...bugOpen, bug_details: { severity: { in: ['CRITICAL', 'BLOCKER'] } } } }),
@@ -69,7 +70,7 @@ export async function getProjectDashboard(filters: ProjectDashboardFilters) {
     updatedAt: new Date().toISOString(),
     metrics: {
       totalItems: total, completedItems: completed, inProgressItems: inProgress,
-      overdueItems: { value: 0, supported: false, reason: 'Items do not currently have a due date field.' },
+      overdueItems: { value: overdue, supported: true },
       unassignedItems: unassigned, openBugs: bugsOpen, criticalBugs, reopenedBugs,
     },
     currentSprint: activeSprint ? {

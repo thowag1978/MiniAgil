@@ -1,10 +1,12 @@
 import 'dotenv/config';
 import { createApp } from './app';
 import { registerWebhookEventHandler, startWebhookWorker } from './services/webhooks';
+import { startDomainEventOutboxWorker } from './services/domainEventOutbox';
 
 const app = createApp();
 const PORT = Number(process.env.API_PORT || 4000);
 registerWebhookEventHandler();
+startDomainEventOutboxWorker();
 startWebhookWorker();
 
 app.listen(PORT, () => {

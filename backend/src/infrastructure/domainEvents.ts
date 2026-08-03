@@ -28,15 +28,16 @@ export class DomainEventBus {
   subscribe(type: DomainEventType | '*', handler: DomainEventHandler) { const handlers = this.handlers.get(type) ?? new Set(); handlers.add(handler); this.handlers.set(type, handlers); return () => handlers.delete(handler); }
   async publish(event: DomainEvent): Promise<PublishResult> {
     if (this.processed.has(event.eventId)) return { eventId: event.eventId, duplicate: true, failures: [] };
-    this.processed.add(event.eventId);
-    if (this.processed.size > this.deduplicationLimit) this.processed.delete(this.processed.values().next().value!);
     const handlers = [...(this.handlers.get(event.eventType) ?? []), ...(this.handlers.get('*') ?? [])];
     const failures: PublishResult['failures'] = [];
     for (const handler of handlers) { try { await handler(event); } catch (error) { failures.push({ handler: handler.name || 'anonymous', error }); console.error(`Domain event handler failed for ${event.eventType}`, error); } }
+    if (!failures.length) {
+      this.processed.add(event.eventId);
+      if (this.processed.size > this.deduplicationLimit) this.processed.delete(this.processed.values().next().value!);
+    }
     return { eventId: event.eventId, duplicate: false, failures };
   }
   clear() { this.handlers.clear(); this.processed.clear(); }
 }
 
 export const domainEventBus = new DomainEventBus();
-export async function publishDomainEvent<T extends Record<string, unknown>>(input: Parameters<typeof createDomainEvent<T>>[0]) { return domainEventBus.publish(createDomainEvent(input)); }

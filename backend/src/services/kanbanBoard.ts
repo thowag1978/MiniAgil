@@ -2,7 +2,7 @@ import { ItemHistoryEvent, Prisma } from '@prisma/client';
 import { prisma } from '../infrastructure/db';
 import { recordCommentHistory, recordItemChanges } from './itemHistory';
 import { validateWorkflowTransition, WorkflowTransitionError } from './workflowTransitions';
-import { publishDomainEvent } from '../infrastructure/domainEvents';
+import { publishDomainEvent } from './domainEventOutbox';
 
 const POSITION_STEP = 1024;
 const MIN_POSITION_GAP = 0.001;

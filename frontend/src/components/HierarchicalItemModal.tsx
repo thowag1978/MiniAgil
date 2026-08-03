@@ -29,6 +29,7 @@ interface FormData {
   acceptance_criteria: string;
   estimate: string;
   story_points: string;
+  due_date: string;
 }
 
 export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, projectData, parentData, initialData }: HierarchicalItemModalProps) {
@@ -44,6 +45,7 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
     acceptance_criteria: initialData?.acceptance_criteria || '',
     estimate: initialData?.estimate ? String(initialData.estimate) : '',
     story_points: initialData?.story_points?.toString() || '',
+    due_date: initialData?.due_date ? initialData.due_date.slice(0, 10) : '',
   });
 
   const usersQuery = useQuery({ queryKey: queryKeys.users, queryFn: () => usersApi.list() });
@@ -69,6 +71,7 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
           workflow_status_id: resolvedWorkflowStatusId,
           assignee_id: formData.assignee_id || null,
           parent_id: formData.parent_id || null,
+          due_date: formData.due_date || null,
         };
 
         if (type === 'STORY') { payload.acceptance_criteria = formData.acceptance_criteria; payload.story_points = formData.story_points ? Number(formData.story_points) : null; }
@@ -86,6 +89,7 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
         workflow_status_id: resolvedWorkflowStatusId,
         assignee_id: formData.assignee_id || null,
         parent_id: formData.parent_id || null,
+        due_date: formData.due_date || null,
       };
 
       if (type === 'STORY') { payload.acceptance_criteria = formData.acceptance_criteria; payload.story_points = formData.story_points ? Number(formData.story_points) : null; }
@@ -177,6 +181,11 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
                     <option value="CRITICAL">Critica</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Prazo</label>
+                <input type="date" className="input-glass" value={formData.due_date} onChange={e => handleChange('due_date', e.target.value)} />
               </div>
 
               <div style={{ display: 'flex', gap: 15 }}>

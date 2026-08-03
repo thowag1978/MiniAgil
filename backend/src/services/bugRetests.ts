@@ -1,7 +1,7 @@
 import { BugEnvironment, BugRetestResult, ItemHistoryEvent, Prisma, WorkflowCategory } from '@prisma/client';
 import { prisma } from '../infrastructure/db';
 import { recordItemHistory } from './itemHistory';
-import { publishDomainEvent } from '../infrastructure/domainEvents';
+import { publishDomainEvent } from './domainEventOutbox';
 import { validateWorkflowTransition, WorkflowTransitionError } from './workflowTransitions';
 
 export class BugRetestError extends Error {

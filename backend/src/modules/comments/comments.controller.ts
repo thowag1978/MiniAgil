@@ -4,7 +4,7 @@ import { prisma } from '../../infrastructure/db';
 import { canViewProject, isProjectOwnerOrAdmin } from '../../services/permissions';
 import { recordCommentHistory } from '../../services/itemHistory';
 import { followItem } from '../../services/itemWatchers';
-import { publishDomainEvent } from '../../infrastructure/domainEvents';
+import { publishDomainEvent } from '../../services/domainEventOutbox';
 
 const commentInclude = {
   user: { select: { id: true, name: true, email: true } },

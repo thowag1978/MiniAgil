@@ -23,4 +23,18 @@ describe('domain events', () => {
     const result = await bus.publish(createDomainEvent(input));
     expect(result.failures).toHaveLength(1); expect(successful).toHaveBeenCalledTimes(1); log.mockRestore();
   });
+
+  it('allows a durable worker to retry an event after a handler failure', async () => {
+    const bus = new DomainEventBus();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const handler = vi.fn().mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValue(undefined);
+    bus.subscribe('ITEM_CREATED', handler);
+    const event = createDomainEvent({ ...input, eventId: 'retryable-event' });
+
+    expect((await bus.publish(event)).failures).toHaveLength(1);
+    expect((await bus.publish(event)).duplicate).toBe(false);
+    expect((await bus.publish(event)).duplicate).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(2);
+    log.mockRestore();
+  });
 });

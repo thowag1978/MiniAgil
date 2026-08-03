@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes }
 import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 
-const key = () => { const material = process.env.WEBHOOK_ENCRYPTION_KEY || process.env.JWT_SECRET; if (!material) throw new Error('WEBHOOK_ENCRYPTION_KEY is required'); return createHash('sha256').update(material).digest(); };
+const key = () => { const material = process.env.WEBHOOK_ENCRYPTION_KEY; if (!material) throw new Error('WEBHOOK_ENCRYPTION_KEY is required'); return createHash('sha256').update(material).digest(); };
 export function encryptWebhookSecret(secret: string) { const iv = randomBytes(12); const cipher = createCipheriv('aes-256-gcm', key(), iv); const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]); return [iv.toString('base64url'), cipher.getAuthTag().toString('base64url'), encrypted.toString('base64url')].join('.'); }
 export function decryptWebhookSecret(value: string) { const [iv, tag, encrypted] = value.split('.'); if (!iv || !tag || !encrypted) throw new Error('Invalid encrypted webhook secret'); const decipher = createDecipheriv('aes-256-gcm', key(), Buffer.from(iv, 'base64url')); decipher.setAuthTag(Buffer.from(tag, 'base64url')); return Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64url')), decipher.final()]).toString('utf8'); }
 export function webhookSignature(payload: string, secret: string) { return `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`; }

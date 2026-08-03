@@ -195,6 +195,7 @@ export interface Item {
   parent_id?: string | null;
   acceptance_criteria?: string | null;
   estimate?: number | null;
+  due_date?: string | null;
   board_position: number;
   backlog_position: number;
   story_points?: number | null;

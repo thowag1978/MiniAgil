@@ -12,7 +12,7 @@ import {
   storeAttachment,
 } from '../../services/attachments';
 import { validateFileContent } from './attachments.upload';
-import { publishDomainEvent } from '../../infrastructure/domainEvents';
+import { publishDomainEvent } from '../../services/domainEventOutbox';
 
 type AuthorizedItemRequest = AuthRequest & {
   itemContext?: { id: string; project_id: string };

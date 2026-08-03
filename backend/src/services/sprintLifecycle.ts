@@ -2,7 +2,7 @@ import { ItemHistoryEvent, SprintStatus } from '@prisma/client';
 import { prisma } from '../infrastructure/db';
 import { recordItemHistory } from './itemHistory';
 import { captureInitialSprintScope, createSprintSnapshot, recordSprintScopeChange } from './sprintMetrics';
-import { publishDomainEvent } from '../infrastructure/domainEvents';
+import { publishDomainEvent } from './domainEventOutbox';
 
 export class SprintLifecycleError extends Error { constructor(public statusCode: number, message: string) { super(message); } }
 type PendingDestination = 'BACKLOG' | 'SPRINT';

@@ -118,3 +118,7 @@
   padding: 4px 8px;
   border-radius: 4px;
 }
+
+.storyPoints { min-width: 78px; text-align: center; font-size: .78rem; font-weight: 600; color: var(--accent-primary); }
+.withoutPoints { border-left: 3px solid #f59e0b; }
+.pointsFilter { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: .85rem; }

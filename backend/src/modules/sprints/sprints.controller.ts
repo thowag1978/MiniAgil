@@ -1,9 +1,40 @@
 import { Request, Response } from 'express';
-import { SprintStatus } from '@prisma/client';
 import { prisma } from '../../infrastructure/db';
 import { canCreateItem, canUpdateItem, canViewProject } from '../../services/permissions';
+import { addStoryToSprint, removeStoryFromSprint, SprintPlanningError } from '../../services/sprintPlanning';
+import { cancelSprint, finishSprint, SprintLifecycleError, startSprint } from '../../services/sprintLifecycle';
+import { getProjectVelocity, getSprintMetrics } from '../../services/sprintMetrics';
 
 export class SprintsController {
+  async metrics(req: any, res: Response) {
+    const sprint = await prisma.sprint.findUnique({ where: { id: req.params.id }, select: { project_id: true } });
+    if (!sprint || !(await canViewProject(req.user.id, sprint.project_id))) return res.status(404).json({ error: 'Sprint not found or access denied' });
+    return res.json(await getSprintMetrics(req.params.id));
+  }
+
+  async velocity(req: any, res: Response) {
+    const projectId = String(req.query.project_id || '');
+    if (!projectId) return res.status(400).json({ error: 'project_id query param is required' });
+    if (!(await canViewProject(req.user.id, projectId))) return res.status(404).json({ error: 'Project not found or access denied' });
+    return res.json(await getProjectVelocity(projectId));
+  }
+
+  private async plan(req: any, res: Response, add: boolean) {
+    const sprint = await prisma.sprint.findUnique({ where: { id: req.params.id }, select: { project_id: true } });
+    if (!sprint) return res.status(404).json({ error: 'Sprint not found' });
+    if (!(await canUpdateItem(req.user.id, sprint.project_id))) return res.status(403).json({ error: 'You do not have permission to plan this sprint' });
+    try {
+      const input = { sprintId: req.params.id, itemId: req.params.itemId, userId: req.user.id };
+      res.json(add ? await addStoryToSprint(input) : await removeStoryFromSprint(input));
+    } catch (error) {
+      if (error instanceof SprintPlanningError) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  }
+
+  addItem = (req: any, res: Response) => this.plan(req, res, true);
+  removeItem = (req: any, res: Response) => this.plan(req, res, false);
+
   async create(req: any, res: Response) {
     const { name, goal, startDate, endDate, project_id } = req.body;
     
@@ -52,10 +83,11 @@ export class SprintsController {
 
   async updateStatus(req: any, res: Response) {
     const { id } = req.params;
-    const { status } = req.body; // PLANNED, ACTIVE, CLOSED
+    const { status } = req.body;
 
-    const normalizedStatus = String(status || '').toUpperCase();
-    if (!['PLANNED', 'ACTIVE', 'CLOSED'].includes(normalizedStatus)) {
+    const requestedStatus = String(status || '').toUpperCase();
+    const normalizedStatus = requestedStatus === 'CLOSED' ? 'FINISHED' : requestedStatus;
+    if (!['ACTIVE', 'FINISHED', 'CANCELLED'].includes(normalizedStatus)) {
       return res.status(400).json({ error: 'Invalid sprint status' });
     }
 
@@ -72,25 +104,17 @@ export class SprintsController {
       return res.status(403).json({ error: 'You do not have permission to update sprints in this project' });
     }
 
-    if (normalizedStatus === 'ACTIVE') {
-      const activeSprint = await prisma.sprint.findFirst({
-        where: {
-          id: { not: id },
-          status: 'ACTIVE',
-          project_id: sprint.project_id,
-        },
-        select: { id: true },
-      });
-
-      if (activeSprint) {
-        return res.status(400).json({ error: 'Project already has an active sprint' });
-      }
+    try {
+      if (normalizedStatus === 'ACTIVE') return res.json(await startSprint(sprint.id, req.user.id));
+      if (normalizedStatus === 'CANCELLED') return res.json(await cancelSprint(sprint.id, req.user.id));
+      const pendingDestination = String(req.body.pending_destination || '').toUpperCase() as 'BACKLOG' | 'SPRINT';
+      return res.json(await finishSprint({
+        sprintId: sprint.id, userId: req.user.id, pendingDestination,
+        ...(req.body.target_sprint_id ? { targetSprintId: String(req.body.target_sprint_id) } : {}),
+      }));
+    } catch (error) {
+      if (error instanceof SprintLifecycleError) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
     }
-
-    const updated = await prisma.sprint.update({
-      where: { id: sprint.id },
-      data: { status: normalizedStatus as SprintStatus }
-    });
-    res.json(updated);
   }
 }

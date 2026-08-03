@@ -21,7 +21,8 @@ interface RequestOptions extends RequestInit {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  if (!isFormData) headers.set('Content-Type', 'application/json');
 
   if (options.auth !== false) {
     const token = options.token ?? getToken();

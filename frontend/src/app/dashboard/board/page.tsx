@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './board.module.css';
 import IssueModal from '../../../components/IssueModal';
@@ -8,88 +8,85 @@ import { itemsApi } from '@/lib/api/items';
 import { projectsApi } from '@/lib/api/projects';
 import { queryKeys } from '@/lib/query/keys';
 import type { Item } from '@/lib/types';
+import { workflowsApi } from '@/lib/api/workflows';
+import { sprintsApi } from '@/lib/api/sprints';
+import KanbanFilters from '@/components/KanbanFilters';
+import type { KanbanFilters as FilterValues } from '@/lib/types';
+import KanbanColumns from '@/components/KanbanColumns';
 
 export default function KanbanBoard() {
   const queryClient = useQueryClient();
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectIdOverride, setSelectedProjectIdOverride] = useState(() => typeof window === 'undefined' ? '' : window.localStorage.getItem('miniagil:kanban-project') || '');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Item | null>(null);
+  const [filtersByProject, setFiltersByProject] = useState<Record<string, FilterValues>>(() => {
+    if (typeof window === 'undefined') return {};
+    try { return JSON.parse(window.localStorage.getItem('miniagil:kanban-filters') || '{}'); } catch { return {}; }
+  });
 
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects,
     queryFn: () => projectsApi.list(),
   });
 
-  useEffect(() => {
-    const projects = projectsQuery.data || [];
-    if (projects.length === 0) {
-      setSelectedProjectId('');
-      return;
-    }
-    if (!selectedProjectId || !projects.some((p) => p.id === selectedProjectId)) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [projectsQuery.data, selectedProjectId]);
+  const projects = projectsQuery.data || [];
+  const selectedProjectId = projects.some((project) => project.id === selectedProjectIdOverride)
+    ? selectedProjectIdOverride
+    : projects[0]?.id || '';
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const filters = filtersByProject[selectedProjectId] || {};
+  const filtersKey = JSON.stringify(filters);
 
-  const boardItemsKey = queryKeys.backlogOverview(selectedProjectId || 'none');
+  const boardItemsKey = queryKeys.backlogOverview(selectedProjectId || 'none', filtersKey);
 
   const backlogQuery = useQuery({
     queryKey: boardItemsKey,
-    queryFn: () => itemsApi.backlogOverview(selectedProjectId),
+    queryFn: () => itemsApi.backlogOverview(selectedProjectId, filters),
     enabled: Boolean(selectedProjectId),
   });
 
-  const items = backlogQuery.data?.sprintItems || [];
+  const workflowsQuery = useQuery({
+    queryKey: queryKeys.projectWorkflows(selectedProjectId || 'none'),
+    queryFn: () => workflowsApi.list(selectedProjectId),
+    enabled: Boolean(selectedProjectId),
+  });
+  const sprintsQuery = useQuery({
+    queryKey: queryKeys.sprints(selectedProjectId || 'none'),
+    queryFn: () => sprintsApi.list(selectedProjectId),
+    enabled: Boolean(selectedProjectId),
+  });
+  const epicsQuery = useQuery({
+    queryKey: queryKeys.itemsByFilter(`${selectedProjectId}:EPIC:kanban-filter`),
+    queryFn: () => itemsApi.list({ project_id: selectedProjectId, type: 'EPIC' }),
+    enabled: Boolean(selectedProjectId),
+  });
+
+  const items = useMemo(() => backlogQuery.data?.sprintItems || [], [backlogQuery.data?.sprintItems]);
+
+  const updateFilters = (next: FilterValues) => {
+    setFiltersByProject((current) => {
+      const updated = { ...current, [selectedProjectId]: next };
+      window.localStorage.setItem('miniagil:kanban-filters', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const openIssue = (issue: Item) => {
     setSelectedIssue(issue);
     setIsModalOpen(true);
   };
 
-  const getProjectLabel = (item: Item) => {
-    if (item.project?.name) return item.project.name;
-    if (item.project?.key_prefix) return item.project.key_prefix;
-    return item.project_key?.split('-')[0] || 'Projeto';
-  };
-
-  const getSprintLabel = (item: Item) => {
-    if (item.sprint?.name) return item.sprint.name;
-    return 'Sem sprint';
-  };
-
-  const aFazerItems = items.filter(item => item.workflow_status?.name === 'A FAZER');
-  const emProgressoItems = items.filter(item => item.workflow_status?.name === 'EM PROGRESSO');
-  const paraRevisaoItems = items.filter(item => item.workflow_status?.name === 'PARA REVISÃO');
-  const concluidoItems = items.filter(item => item.workflow_status?.name === 'CONCLUÍDO');
-
-  const renderColumn = (title: string, columnItems: Item[]) => (
-    <div className={styles.column}>
-      <div className={styles.columnHeader}>
-        <h3>{title}</h3>
-        <span className={styles.count}>{columnItems.length}</span>
-      </div>
-      <div className={styles.columnContent}>
-        {columnItems.map(item => (
-          <div key={item.id} className={styles.ticketCard} onClick={() => openIssue(item)}>
-            <div className={styles.tagRow}>
-              <div className={styles.projectTag}>{getProjectLabel(item)}</div>
-              <div className={`${styles.sprintTag} ${item.sprint ? styles.sprintAssigned : styles.sprintEmpty}`}>
-                {getSprintLabel(item)}
-              </div>
-            </div>
-            <div className={styles.ticketTitle}>{item.title}</div>
-            <div className={styles.ticketFooter}>
-              <span className={`${styles.ticketType} ${item.type === 'BUG' ? styles.typeBug : item.type === 'STORY' ? styles.typeStory : styles.typeTask}`}>
-                {item.type}
-              </span>
-              <span className={styles.ticketKey}>{item.project_key}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  const boardStatuses = useMemo(() => {
+    const itemTypes = new Set(items.map((item) => item.type));
+    return (workflowsQuery.data || [])
+      .filter((workflow) => itemTypes.has(workflow.item_type))
+      .flatMap((workflow) => workflow.statuses
+        .filter((status) => status.is_active !== false)
+        .map((status) => ({ status, itemType: workflow.item_type })))
+      .sort((left, right) => left.itemType.localeCompare(right.itemType)
+        || (left.status.position ?? left.status.order ?? 0) - (right.status.position ?? right.status.order ?? 0));
+  }, [items, workflowsQuery.data]);
 
   return (
     <div className={`animate-fade-in ${styles.boardWrapper}`}>
@@ -106,7 +103,7 @@ export default function KanbanBoard() {
           <select
             className="input-glass"
             value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
+            onChange={(e) => { setSelectedProjectIdOverride(e.target.value); window.localStorage.setItem('miniagil:kanban-project', e.target.value); }}
             style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}
             aria-label="Selecionar projeto"
           >
@@ -121,9 +118,20 @@ export default function KanbanBoard() {
         </div>
       </div>
 
-      {projectsQuery.isLoading || backlogQuery.isLoading ? (
+      {selectedProject && (
+        <KanbanFilters
+          project={selectedProject}
+          workflows={workflowsQuery.data || []}
+          sprints={sprintsQuery.data || []}
+          epics={epicsQuery.data || []}
+          filters={filters}
+          onChange={updateFilters}
+        />
+      )}
+
+      {projectsQuery.isLoading || backlogQuery.isLoading || workflowsQuery.isLoading || sprintsQuery.isLoading || epicsQuery.isLoading ? (
         <div style={{ padding: 20 }}>Carregando tarefas...</div>
-      ) : projectsQuery.isError || backlogQuery.isError ? (
+      ) : projectsQuery.isError || backlogQuery.isError || workflowsQuery.isError || sprintsQuery.isError || epicsQuery.isError ? (
         <div style={{ padding: 20, color: '#ff6b6b' }}>Falha ao carregar tarefas.</div>
       ) : !selectedProjectId ? (
         <div style={{ padding: 20, color: 'var(--text-dim)' }}>Crie um projeto primeiro.</div>
@@ -133,12 +141,7 @@ export default function KanbanBoard() {
           <p style={{ marginTop: 10 }}>Inicie uma sprint na página de Sprints para visualizar o quadro Kanban deste projeto.</p>
         </div>
       ) : (
-        <div className={styles.boardColumns}>
-          {renderColumn('A Fazer', aFazerItems)}
-          {renderColumn('Em Progresso', emProgressoItems)}
-          {renderColumn('Para Revisão', paraRevisaoItems)}
-          {renderColumn('Concluído', concluidoItems)}
-        </div>
+        <KanbanColumns columns={boardStatuses.map(({ status, itemType }) => ({ status, itemType, wipLimit: backlogQuery.data?.columns?.find((column) => column.status_id === status.id)?.wip_limit }))} items={items} onOpen={openIssue} onMoved={() => queryClient.invalidateQueries({ queryKey: boardItemsKey })} />
       )}
 
       {isModalOpen && (

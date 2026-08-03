@@ -96,6 +96,9 @@
   flex-wrap: wrap;
 }
 
+.finishOptions { display: flex; gap: 8px; flex-wrap: wrap; }
+.finishOptions .select { min-width: 190px; }
+
 .sprintSummary {
   color: var(--text-secondary);
   font-size: 0.9rem;
@@ -122,9 +125,9 @@
   background: #0f9f6e;
 }
 
-.statusCLOSED {
-  background: #7c3aed;
-}
+.statusCLOSED { background: #7c3aed; }
+.statusFINISHED { background: #7c3aed; }
+.statusCANCELLED { background: #b91c1c; }
 
 .secondaryButton {
   background: transparent;
@@ -155,6 +158,12 @@
   gap: 24px;
 }
 
+.planningFilters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .listPanel {
   padding: 20px;
   min-width: 0;
@@ -173,7 +182,7 @@
 
 .storyRow {
   display: grid;
-  grid-template-columns: 20px 78px minmax(0, 1fr) 110px;
+  grid-template-columns: 20px 78px minmax(0, 1fr) 190px;
   gap: 12px;
   align-items: center;
   padding: 13px 14px;
@@ -259,3 +268,18 @@
     width: 100%;
   }
 }
+
+.metricsPanel { margin-top: 24px; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.metricsPanel h2, .metricsPanel h3 { margin: 0 0 12px; }
+.metricsPanel h3 { margin-top: 22px; font-size: 1rem; }
+.metricCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+.metricCards div, .velocity div { padding: 12px; border-radius: 8px; background: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+.metricCards span, .velocity span, .velocity small { color: var(--muted-foreground); font-size: .8rem; }
+.metricCards strong, .velocity strong { font-size: 1.35rem; }
+.burndown { display: block; width: 100%; height: 180px; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.actualLine, .idealLine { fill: none; vector-effect: non-scaling-stroke; }
+.actualLine { stroke: #2563eb; stroke-width: 3; }
+.idealLine { stroke: #94a3b8; stroke-width: 1; stroke-dasharray: 5 4; }
+.metricNote, .emptyMetric { color: var(--muted-foreground); font-size: .85rem; }
+.scopeChanges { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.velocity { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }

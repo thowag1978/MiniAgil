@@ -4,7 +4,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './modal.module.css';
 import { itemsApi } from '@/lib/api/items';
 import { queryKeys } from '@/lib/query/keys';
-import type { Item, Priority } from '@/lib/types';
+import type { BugDetails, BugEnvironment, BugOrigin, BugReproducibility, BugSeverity, Item, Priority } from '@/lib/types';
+import ItemComments from './ItemComments';
+import ItemHistory from './ItemHistory';
+import ItemAttachments from './ItemAttachments';
+import BugRetests from './BugRetests';
+import ItemCodeLinks from './ItemCodeLinks';
+import CustomFieldInputs from './CustomFieldInputs';
+import { customFieldsApi } from '@/lib/api/customFields';
+import type { CustomFieldInputValue } from '@/lib/types';
 
 interface IssueModalProps {
   issue: Item | null;
@@ -18,6 +26,10 @@ interface FormData {
   priority: Priority;
   workflow_status_id: string;
   parent_id: string;
+  transition_comment: string;
+  bug_details: Partial<BugDetails>;
+  custom_fields: Record<string, CustomFieldInputValue>;
+  story_points: string;
 }
 
 export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps) {
@@ -29,9 +41,24 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
     priority: issue?.priority || 'MEDIUM',
     workflow_status_id: issue?.workflow_status_id || '',
     parent_id: issue?.parent_id || '',
+    transition_comment: '',
+    bug_details: issue?.bug_details || {
+      severity: 'MEDIUM', environment: 'TEST', origin: 'DEVELOPMENT', reproducibility: 'NOT_REPRODUCED', regression: false, reopened_count: 0,
+    },
+    custom_fields: Object.fromEntries((issue?.custom_field_values || []).map(value => [value.field_id, value.value])),
+    story_points: issue?.story_points?.toString() || '',
   });
 
-  const statusesQuery = useQuery({ queryKey: queryKeys.itemStatuses, queryFn: () => itemsApi.listStatuses() });
+  const statusesQuery = useQuery({
+    queryKey: queryKeys.itemStatuses(issue?.project_id, issue?.type),
+    queryFn: () => itemsApi.listStatuses({ project_id: issue?.project_id, type: issue?.type }),
+    enabled: Boolean(issue?.project_id && issue?.type),
+  });
+  const customFieldsQuery = useQuery({
+    queryKey: queryKeys.customFields(issue?.project_id || 'none', issue?.type || 'TASK'),
+    queryFn: () => customFieldsApi.list(issue!.project_id, issue!.type),
+    enabled: Boolean(issue?.project_id && issue?.type),
+  });
 
   const fetchType = issue?.type === 'STORY' ? 'EPIC' : (issue?.type === 'TASK' || issue?.type === 'BUG' ? 'STORY' : null);
   const parentCandidatesQuery = useQuery({
@@ -43,12 +70,19 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!issue) throw new Error('Issue not selected');
+      const editableBugDetails = { ...formData.bug_details };
+      delete editableBugDetails.id;
+      delete editableBugDetails.item_id;
       return itemsApi.update(issue.id, {
         title: formData.title,
         description: formData.description,
         priority: formData.priority,
         workflow_status_id: formData.workflow_status_id,
         parent_id: formData.parent_id || null,
+        transition_comment: formData.transition_comment || undefined,
+        ...(issue.type === 'BUG' ? { bug_details: editableBugDetails } : {}),
+        custom_fields: formData.custom_fields,
+        ...(issue.type === 'STORY' ? { story_points: formData.story_points ? Number(formData.story_points) : null } : {}),
       });
     },
     onSuccess: () => {
@@ -59,6 +93,7 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
         queryClient.invalidateQueries({ queryKey: queryKeys.backlogOverview(issue.project_id) });
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboardMetrics });
+      if (issue) queryClient.invalidateQueries({ queryKey: queryKeys.itemHistory(issue.id) });
       if (onUpdate) onUpdate();
     },
     onError: (error: Error) => {
@@ -116,6 +151,43 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
               )}
             </div>
 
+            {issue.type === 'STORY' && <div className={styles.descriptionSection}><h3>Story points</h3>{isEditing ? <select className="input-glass" value={formData.story_points} onChange={e => setFormData(current => ({ ...current, story_points: e.target.value }))}><option value="">Sem pontos</option>{[1, 2, 3, 5, 8, 13, 20].map(value => <option key={value} value={value}>{value}</option>)}</select> : <span>{formData.story_points || 'Sem pontos'}</span>}</div>}
+
+            {issue.type === 'BUG' && (
+              <div className={styles.descriptionSection}>
+                <h3>Dados do bug</h3>
+                {isEditing ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <label>Severidade *<select className="input-glass" required value={formData.bug_details.severity} onChange={(e) => setFormData((current) => ({ ...current, bug_details: { ...current.bug_details, severity: e.target.value as BugSeverity } }))}><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option><option value="CRITICAL">Crítica</option><option value="BLOCKER">Bloqueadora</option></select></label>
+                      <label>Ambiente *<select className="input-glass" required value={formData.bug_details.environment} onChange={(e) => setFormData((current) => ({ ...current, bug_details: { ...current.bug_details, environment: e.target.value as BugEnvironment } }))}><option value="DEVELOPMENT">Desenvolvimento</option><option value="TEST">Teste</option><option value="HOMOLOGATION">Homologação</option><option value="PRODUCTION">Produção</option></select></label>
+                      <label>Origem *<select className="input-glass" required value={formData.bug_details.origin} onChange={(e) => setFormData((current) => ({ ...current, bug_details: { ...current.bug_details, origin: e.target.value as BugOrigin } }))}><option value="DEVELOPMENT">Desenvolvimento</option><option value="TEST">Teste</option><option value="HOMOLOGATION">Homologação</option><option value="PRODUCTION">Produção</option><option value="CUSTOMER">Cliente</option><option value="AUDIT">Auditoria</option><option value="MONITORING">Monitoramento</option></select></label>
+                      <label>Reprodutibilidade *<select className="input-glass" required value={formData.bug_details.reproducibility} onChange={(e) => setFormData((current) => ({ ...current, bug_details: { ...current.bug_details, reproducibility: e.target.value as BugReproducibility } }))}><option value="ALWAYS">Sempre</option><option value="INTERMITTENT">Intermitente</option><option value="ONCE">Uma vez</option><option value="NOT_REPRODUCED">Não reproduzido</option></select></label>
+                    </div>
+                    {(['reproduction_steps', 'expected_result', 'actual_result', 'technical_analysis', 'root_cause', 'resolution'] as const).map((field) => <textarea key={field} className="input-glass" rows={2} placeholder={field.replaceAll('_', ' ')} value={formData.bug_details[field] || ''} onChange={(e) => setFormData((current) => ({ ...current, bug_details: { ...current.bug_details, [field]: e.target.value } }))} />)}
+                    <label><input type="checkbox" checked={formData.bug_details.regression || false} onChange={(e) => setFormData((current) => ({ ...current, bug_details: { ...current.bug_details, regression: e.target.checked } }))} /> Regressão</label>
+                    <label>Quantidade de reaberturas<input className="input-glass" type="number" min="0" value={formData.bug_details.reopened_count || 0} onChange={(e) => setFormData((current) => ({ ...current, bug_details: { ...current.bug_details, reopened_count: Number(e.target.value) } }))} /></label>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                    <span>Severidade: <strong>{formData.bug_details.severity}</strong></span><span>Ambiente: <strong>{formData.bug_details.environment}</strong></span>
+                    <span>Origem: <strong>{formData.bug_details.origin}</strong></span><span>Reprodutibilidade: <strong>{formData.bug_details.reproducibility}</strong></span>
+                    <span>Regressão: <strong>{formData.bug_details.regression ? 'Sim' : 'Não'}</strong></span><span>Reaberturas: <strong>{formData.bug_details.reopened_count || 0}</strong></span>
+                    {formData.bug_details.reproduction_steps && <span style={{ gridColumn: '1 / -1' }}>Reprodução: {formData.bug_details.reproduction_steps}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className={styles.descriptionSection}>
+              <CustomFieldInputs
+                fields={isEditing ? (customFieldsQuery.data || []) : (issue.custom_field_values || []).map(value => value.field)}
+                values={formData.custom_fields}
+                readOnly={!isEditing}
+                onChange={(fieldId, value) => setFormData(current => ({ ...current, custom_fields: { ...current.custom_fields, [fieldId]: value } }))}
+              />
+            </div>
+
             {!isEditing && issue.children && issue.children.length > 0 && (
               <div style={{ marginTop: 30 }}>
                 <h3>Sub-itens / Filhos ({issue.children.length})</h3>
@@ -133,6 +205,12 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
                 </div>
               </div>
             )}
+
+            {!isEditing && <ItemComments itemId={issue.id} />}
+            {!isEditing && <ItemAttachments itemId={issue.id} />}
+            {!isEditing && <ItemCodeLinks itemId={issue.id} projectId={issue.project_id} />}
+            {!isEditing && issue.type === 'BUG' && <BugRetests itemId={issue.id} statuses={statusesQuery.data || []} onChanged={onUpdate} />}
+            {!isEditing && <ItemHistory itemId={issue.id} />}
           </div>
 
           <aside className={styles.sidebar}>
@@ -144,6 +222,12 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
                     {(statusesQuery.data || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
+                {formData.workflow_status_id !== issue.workflow_status_id && (
+                  <div className={styles.sidebarField}>
+                    <label>Comentário da transição</label>
+                    <textarea className="input-glass" rows={3} placeholder="Preencha quando exigido pelo workflow" value={formData.transition_comment} onChange={e => setFormData(prev => ({ ...prev, transition_comment: e.target.value }))} />
+                  </div>
+                )}
                 <div className={styles.sidebarField}>
                   <label>Prioridade</label>
                   <select className="input-glass" value={formData.priority} onChange={e => setFormData(prev => ({ ...prev, priority: e.target.value as Priority }))}>

@@ -13,6 +13,7 @@ const pageTitles = [
   { href: '/dashboard/hierarchical-backlog', label: 'Backlog Hierárquico' },
   { href: '/dashboard/sprint', label: 'Sprint' },
   { href: '/dashboard/board', label: 'Quadro Kanban' },
+  { href: '/dashboard/bugs', label: 'Controle de Bugs' },
   { href: '/dashboard/users', label: 'Gestão de Usuários' },
 ];
 

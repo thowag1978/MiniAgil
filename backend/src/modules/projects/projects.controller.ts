@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../infrastructure/db';
 import { canViewProject, getProjectAccessWhere, isProjectOwnerOrAdmin } from '../../services/permissions';
+import { createDefaultWorkflows } from '../../services/workflowDefaults';
 
 const projectResponseSelect = {
   id: true,
@@ -25,20 +26,24 @@ export class ProjectsController {
       return res.status(400).json({ error: 'Key prefix is already in use' });
     }
 
-    const project = await prisma.project.create({
-      data: {
-        name,
-        key_prefix,
-        description,
-        owner_id: req.user.id,
-        members: {
-          create: {
-            user_id: req.user.id,
-            role: 'OWNER'
+    const project = await prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: {
+          name,
+          key_prefix,
+          description,
+          owner_id: req.user.id,
+          members: {
+            create: {
+              user_id: req.user.id,
+              role: 'OWNER'
+            }
           }
-        }
-      },
-      select: projectResponseSelect,
+        },
+        select: projectResponseSelect,
+      });
+      await createDefaultWorkflows(tx, created.id);
+      return created;
     });
 
     res.status(201).json(project);

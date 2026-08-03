@@ -5,11 +5,16 @@ import styles from './modal.module.css';
 import { itemsApi, type CreateItemInput } from '@/lib/api/items';
 import { projectsApi } from '@/lib/api/projects';
 import { queryKeys } from '@/lib/query/keys';
-import type { Item, ItemType, Priority } from '@/lib/types';
+import type { BugEnvironment, BugOrigin, BugReproducibility, BugSeverity, Item, ItemType, Priority } from '@/lib/types';
+import type { CustomFieldInputValue } from '@/lib/types';
+import { customFieldsApi } from '@/lib/api/customFields';
+import CustomFieldInputs from './CustomFieldInputs';
 
 interface CreateItemModalProps {
   onClose: () => void;
   onSuccess: () => void;
+  initialType?: ItemType;
+  initialProjectId?: string;
 }
 
 interface ItemFormData {
@@ -20,6 +25,7 @@ interface ItemFormData {
   project_id: string;
   workflow_status_id: string;
   parent_id: string;
+  story_points: string;
 }
 
 interface ProjectFormData {
@@ -29,19 +35,28 @@ interface ProjectFormData {
   description: string;
 }
 
-export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalProps) {
+const initialBugDetails = {
+  severity: 'MEDIUM' as BugSeverity,
+  environment: 'TEST' as BugEnvironment,
+  origin: 'DEVELOPMENT' as BugOrigin,
+  reproducibility: 'NOT_REPRODUCED' as BugReproducibility,
+  reproduction_steps: '', expected_result: '', actual_result: '', regression: false,
+};
+
+export default function CreateItemModal({ onClose, onSuccess, initialType = 'TASK', initialProjectId = '' }: CreateItemModalProps) {
   const queryClient = useQueryClient();
   const [entityType, setEntityType] = useState<'ITEM' | 'PROJECT'>('ITEM');
   const [projectMode, setProjectMode] = useState<'CREATE' | 'EDIT'>('CREATE');
 
   const [itemForm, setItemForm] = useState<ItemFormData>({
-    type: 'TASK',
+    type: initialType,
     title: '',
     description: '',
     priority: 'MEDIUM',
-    project_id: '',
+    project_id: initialProjectId,
     workflow_status_id: '',
     parent_id: '',
+    story_points: '',
   });
 
   const [projectForm, setProjectForm] = useState<ProjectFormData>({
@@ -56,13 +71,19 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
     queryFn: () => projectsApi.list(),
   });
 
-  const statusesQuery = useQuery({
-    queryKey: queryKeys.itemStatuses,
-    queryFn: () => itemsApi.listStatuses(),
-    enabled: entityType === 'ITEM',
-  });
-
   const selectedProjectId = itemForm.project_id || projectsQuery.data?.[0]?.id || '';
+  const statusesQuery = useQuery({
+    queryKey: queryKeys.itemStatuses(selectedProjectId, itemForm.type),
+    queryFn: () => itemsApi.listStatuses({ project_id: selectedProjectId, type: itemForm.type }),
+    enabled: entityType === 'ITEM' && Boolean(selectedProjectId),
+  });
+  const [bugDetails, setBugDetails] = useState(initialBugDetails);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, CustomFieldInputValue>>({});
+  const customFieldsQuery = useQuery({
+    queryKey: queryKeys.customFields(selectedProjectId, itemForm.type),
+    queryFn: () => customFieldsApi.list(selectedProjectId, itemForm.type),
+    enabled: entityType === 'ITEM' && Boolean(selectedProjectId),
+  });
   const parentType = useMemo(() => {
     if (itemForm.type === 'STORY') return 'EPIC';
     if (itemForm.type === 'TASK' || itemForm.type === 'BUG') return 'STORY';
@@ -142,6 +163,8 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
     }
   }, [parentType]);
 
+  React.useEffect(() => { setCustomFieldValues({}); }, [selectedProjectId, itemForm.type]);
+
   React.useEffect(() => {
     if (projectMode === 'EDIT' && projectForm.id && projectsQuery.data) {
       const selected = projectsQuery.data.find((p) => p.id === projectForm.id);
@@ -183,6 +206,9 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
       project_id: selectedProjectId,
       workflow_status_id: itemForm.workflow_status_id,
       parent_id: itemForm.parent_id || null,
+      ...(itemForm.type === 'BUG' ? { bug_details: bugDetails } : {}),
+      custom_fields: customFieldValues,
+      ...(itemForm.type === 'STORY' ? { story_points: itemForm.story_points ? Number(itemForm.story_points) : null } : {}),
     };
 
     if (!payload.parent_id) delete payload.parent_id;
@@ -256,7 +282,7 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
                     <select
                       className="input-glass"
                       value={itemForm.type}
-                      onChange={(e) => setItemForm((prev) => ({ ...prev, type: e.target.value as ItemType }))}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, type: e.target.value as ItemType, workflow_status_id: '' }))}
                       style={{ width: '100%' }}
                     >
                       <option value="EPIC">Épico</option>
@@ -270,7 +296,7 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
                     <select
                       className="input-glass"
                       value={itemForm.project_id}
-                      onChange={(e) => setItemForm((prev) => ({ ...prev, project_id: e.target.value, parent_id: '' }))}
+                      onChange={(e) => setItemForm((prev) => ({ ...prev, project_id: e.target.value, parent_id: '', workflow_status_id: '' }))}
                       style={{ width: '100%' }}
                     >
                       {(projectsQuery.data || []).map((project) => (
@@ -360,6 +386,26 @@ export default function CreateItemModal({ onClose, onSuccess }: CreateItemModalP
                     style={{ width: '100%' }}
                   />
                 </div>
+
+                {itemForm.type === 'STORY' && <div><label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Story points</label><select className="input-glass" value={itemForm.story_points} onChange={e => setItemForm(prev => ({ ...prev, story_points: e.target.value }))}><option value="">Sem pontos</option>{[1, 2, 3, 5, 8, 13, 20].map(value => <option key={value} value={value}>{value}</option>)}</select></div>}
+
+                {itemForm.type === 'BUG' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 14, border: '1px solid var(--border-color)', borderRadius: 8 }}>
+                    <strong>Dados do bug</strong>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <label>Severidade *<select required className="input-glass" value={bugDetails.severity} onChange={(e) => setBugDetails((current) => ({ ...current, severity: e.target.value as BugSeverity }))}><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option><option value="CRITICAL">Crítica</option><option value="BLOCKER">Bloqueadora</option></select></label>
+                      <label>Ambiente *<select required className="input-glass" value={bugDetails.environment} onChange={(e) => setBugDetails((current) => ({ ...current, environment: e.target.value as BugEnvironment }))}><option value="DEVELOPMENT">Desenvolvimento</option><option value="TEST">Teste</option><option value="HOMOLOGATION">Homologação</option><option value="PRODUCTION">Produção</option></select></label>
+                      <label>Origem *<select required className="input-glass" value={bugDetails.origin} onChange={(e) => setBugDetails((current) => ({ ...current, origin: e.target.value as BugOrigin }))}><option value="DEVELOPMENT">Desenvolvimento</option><option value="TEST">Teste</option><option value="HOMOLOGATION">Homologação</option><option value="PRODUCTION">Produção</option><option value="CUSTOMER">Cliente</option><option value="AUDIT">Auditoria</option><option value="MONITORING">Monitoramento</option></select></label>
+                      <label>Reprodutibilidade *<select required className="input-glass" value={bugDetails.reproducibility} onChange={(e) => setBugDetails((current) => ({ ...current, reproducibility: e.target.value as BugReproducibility }))}><option value="ALWAYS">Sempre</option><option value="INTERMITTENT">Intermitente</option><option value="ONCE">Uma vez</option><option value="NOT_REPRODUCED">Não reproduzido</option></select></label>
+                    </div>
+                    <textarea className="input-glass" rows={3} placeholder="Passos para reprodução" value={bugDetails.reproduction_steps} onChange={(e) => setBugDetails((current) => ({ ...current, reproduction_steps: e.target.value }))} />
+                    <textarea className="input-glass" rows={2} placeholder="Resultado esperado" value={bugDetails.expected_result} onChange={(e) => setBugDetails((current) => ({ ...current, expected_result: e.target.value }))} />
+                    <textarea className="input-glass" rows={2} placeholder="Resultado atual" value={bugDetails.actual_result} onChange={(e) => setBugDetails((current) => ({ ...current, actual_result: e.target.value }))} />
+                    <label><input type="checkbox" checked={bugDetails.regression} onChange={(e) => setBugDetails((current) => ({ ...current, regression: e.target.checked }))} /> Regressão</label>
+                  </div>
+                )}
+
+                <CustomFieldInputs fields={customFieldsQuery.data || []} values={customFieldValues} onChange={(fieldId, value) => setCustomFieldValues(current => ({ ...current, [fieldId]: value }))} />
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                   <button className="btn-secondary" onClick={onClose}>Cancelar</button>

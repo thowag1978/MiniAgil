@@ -16,12 +16,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ownedProjects Project[]       @relation("ProjectOwner")
-  projects      ProjectMember[]
-  reportedItems Item[]          @relation("ReportedItems")
-  assignedItems Item[]          @relation("AssignedItems")
-  comments      Comment[]
-  teams         TeamMember[]
+  ownedProjects       Project[]           @relation("ProjectOwner")
+  projects            ProjectMember[]
+  reportedItems       Item[]              @relation("ReportedItems")
+  assignedItems       Item[]              @relation("AssignedItems")
+  comments            Comment[]
+  attachments         Attachment[]
+  teams               TeamMember[]
+  itemHistory         ItemHistory[]
+  watchedItems        ItemWatcher[]
+  notifications       Notification[]      @relation("NotificationRecipient")
+  notificationActions Notification[]      @relation("NotificationActor")
+  savedViews          SavedView[]
+  bugRetests          BugRetest[]
+  startedSprints      Sprint[]            @relation("SprintStartedBy")
+  finishedSprints     Sprint[]            @relation("SprintFinishedBy")
+  sprintScopeChanges  SprintScopeChange[]
+  createdCodeLinks    ItemCodeLink[]
 
   @@map("users")
 }
@@ -41,11 +52,18 @@ model Project {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  owner   User            @relation("ProjectOwner", fields: [owner_id], references: [id])
-  members ProjectMember[]
-  sprints Sprint[]
-  items   Item[]
-  teams   TeamProject[]
+  owner         User                @relation("ProjectOwner", fields: [owner_id], references: [id])
+  members       ProjectMember[]
+  sprints       Sprint[]
+  items         Item[]
+  teams         TeamProject[]
+  history       ItemHistory[]
+  notifications Notification[]
+  workflows     Workflow[]
+  savedViews    SavedView[]
+  customFields  CustomField[]
+  webhooks      Webhook[]
+  repositories  ProjectRepository[]
 
   @@index([owner_id])
   @@map("projects")
@@ -117,69 +135,322 @@ enum ProjectRole {
   VIEWER
 }
 
-model Sprint {
-  id         String       @id @default(uuid())
-  name       String
-  goal       String?
-  status     SprintStatus @default(PLANNED)
-  startDate  DateTime?
-  endDate    DateTime?
-  project_id String
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+enum SavedViewType {
+  KANBAN
+}
 
-  project Project @relation(fields: [project_id], references: [id])
-  items   Item[]
+model SavedView {
+  id         String        @id @default(uuid())
+  user_id    String
+  project_id String
+  name       String
+  view_type  SavedViewType @default(KANBAN)
+  filters    Json
+  is_default Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, project_id, view_type, name])
+  @@index([user_id, project_id, view_type, is_default])
+  @@map("saved_views")
+}
+
+model Sprint {
+  id                   String       @id @default(uuid())
+  name                 String
+  goal                 String?
+  status               SprintStatus @default(PLANNED)
+  startDate            DateTime?
+  endDate              DateTime?
+  project_id           String
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  started_by_id        String?
+  finished_by_id       String?
+  initial_scope_points Int?
+  initial_scope_items  Int?
+  scopeCapturedAt      DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  project      Project             @relation(fields: [project_id], references: [id])
+  startedBy    User?               @relation("SprintStartedBy", fields: [started_by_id], references: [id])
+  finishedBy   User?               @relation("SprintFinishedBy", fields: [finished_by_id], references: [id])
+  items        Item[]
+  scopeChanges SprintScopeChange[]
+  snapshots    SprintSnapshot[]
 
   @@index([project_id])
+  @@index([started_by_id])
+  @@index([finished_by_id])
   @@map("sprints")
 }
 
 enum SprintStatus {
   PLANNED
   ACTIVE
-  CLOSED
+  FINISHED
+  CANCELLED
+}
+
+enum SprintScopeChangeType {
+  ADDED
+  REMOVED
+}
+
+model SprintScopeChange {
+  id          String                @id @default(uuid())
+  sprint_id   String
+  item_id     String?
+  user_id     String
+  change_type SprintScopeChangeType
+  points      Int
+  item_key    String
+  item_title  String
+  reason      String?
+  createdAt   DateTime              @default(now())
+
+  sprint Sprint @relation(fields: [sprint_id], references: [id], onDelete: Cascade)
+  item   Item?  @relation(fields: [item_id], references: [id], onDelete: SetNull)
+  user   User   @relation(fields: [user_id], references: [id])
+
+  @@index([sprint_id, createdAt])
+  @@index([item_id])
+  @@index([user_id])
+  @@map("sprint_scope_changes")
+}
+
+model SprintSnapshot {
+  id               String   @id @default(uuid())
+  sprint_id        String
+  snapshot_date    DateTime @db.Date
+  scope_points     Int
+  remaining_points Int
+  completed_points Int
+  added_points     Int
+  removed_points   Int
+  total_items      Int
+  completed_items  Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sprint Sprint @relation(fields: [sprint_id], references: [id], onDelete: Cascade)
+
+  @@unique([sprint_id, snapshot_date])
+  @@index([sprint_id, snapshot_date])
+  @@map("sprint_snapshots")
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  RETRYING
+  FAILED
+}
+
+model Webhook {
+  id               String            @id @default(uuid())
+  project_id       String
+  name             String
+  url              String            @db.Text
+  secret_encrypted String            @db.Text
+  events           Json
+  is_active        Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  project          Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  deliveries       WebhookDelivery[]
+
+  @@unique([project_id, name])
+  @@index([project_id, is_active])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id              String                @id @default(uuid())
+  webhook_id      String
+  event_id        String
+  event_type      String
+  payload         Json
+  status          WebhookDeliveryStatus @default(PENDING)
+  attempt_count   Int                   @default(0)
+  response_status Int?
+  response_body   String?               @db.Text
+  last_error      String?               @db.Text
+  nextAttemptAt   DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  webhook         Webhook               @relation(fields: [webhook_id], references: [id], onDelete: Cascade)
+
+  @@unique([webhook_id, event_id])
+  @@index([status, nextAttemptAt])
+  @@index([webhook_id, createdAt])
+  @@map("webhook_deliveries")
+}
+
+enum CodeLinkType {
+  ISSUE
+  PULL_REQUEST
+  COMMIT
+  BRANCH
+}
+
+model ProjectRepository {
+  id             String         @id @default(uuid())
+  project_id     String
+  owner          String
+  repository     String
+  default_branch String         @default("main")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  project        Project        @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  codeLinks      ItemCodeLink[]
+
+  @@unique([project_id, owner, repository])
+  @@index([project_id])
+  @@map("project_repositories")
+}
+
+model ItemCodeLink {
+  id              String            @id @default(uuid())
+  item_id         String
+  repository_id   String
+  created_by_id   String
+  link_type       CodeLinkType
+  external_number Int?
+  url             String            @db.Text
+  branch          String?
+  state           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  item            Item              @relation(fields: [item_id], references: [id], onDelete: Cascade)
+  repository      ProjectRepository @relation(fields: [repository_id], references: [id], onDelete: Cascade)
+  createdBy       User              @relation(fields: [created_by_id], references: [id])
+
+  @@index([item_id])
+  @@index([repository_id])
+  @@index([created_by_id])
+  @@map("item_code_links")
+}
+
+model Workflow {
+  id         String   @id @default(uuid())
+  name       String
+  project_id String
+  item_type  ItemType
+  is_default Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project     Project              @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  statuses    WorkflowStatus[]
+  transitions WorkflowTransition[]
+
+  @@unique([project_id, item_type, name])
+  @@index([project_id, item_type, is_default])
+  @@map("workflows")
+}
+
+enum WorkflowCategory {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELLED
 }
 
 model WorkflowStatus {
-  id    String @id @default(uuid())
-  name  String @unique
-  order Int    @default(0)
+  id          String           @id @default(uuid())
+  workflow_id String?
+  name        String
+  category    WorkflowCategory @default(TODO)
+  color       String           @default("#64748B")
+  position    Int              @default(0)
+  is_active   Boolean          @default(true)
+  is_initial  Boolean          @default(false)
+  is_final    Boolean          @default(false)
+  wip_limit   Int?
+  order       Int              @default(0)
 
-  items Item[]
+  workflow            Workflow?            @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  items               Item[]
+  outgoingTransitions WorkflowTransition[] @relation("WorkflowTransitionFrom")
+  incomingTransitions WorkflowTransition[] @relation("WorkflowTransitionTo")
 
+  @@unique([workflow_id, name])
+  @@index([workflow_id, position])
   @@map("workflow_statuses")
 }
 
+model WorkflowTransition {
+  id                String       @id @default(uuid())
+  workflow_id       String
+  from_status_id    String
+  to_status_id      String
+  allowed_role      ProjectRole?
+  requires_comment  Boolean      @default(false)
+  requires_assignee Boolean      @default(false)
+  is_active         Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  workflow   Workflow       @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  fromStatus WorkflowStatus @relation("WorkflowTransitionFrom", fields: [from_status_id], references: [id], onDelete: Cascade)
+  toStatus   WorkflowStatus @relation("WorkflowTransitionTo", fields: [to_status_id], references: [id], onDelete: Cascade)
+
+  @@index([workflow_id, is_active])
+  @@index([from_status_id, to_status_id])
+  @@map("workflow_transitions")
+}
+
 model Item {
-  id                 String   @id @default(uuid())
-  project_key        String   @unique
-  type               ItemType
-  title              String
-  description        String?  @db.Text
-  workflow_status_id String
-  priority           Priority @default(MEDIUM)
-  reporter_id        String
-  assignee_id        String?
-  project_id         String
-  sprint_id          String?
-  parent_id          String?
+  id                  String   @id @default(uuid())
+  project_key         String   @unique
+  type                ItemType
+  title               String
+  description         String?  @db.Text
+  workflow_status_id  String
+  priority            Priority @default(MEDIUM)
+  reporter_id         String
+  assignee_id         String?
+  project_id          String
+  sprint_id           String?
+  parent_id           String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   acceptance_criteria String?  @db.Text
   estimate            Int?
+  board_position      Float    @default(0)
+  backlog_position    Float    @default(0)
+  story_points        Int?
 
-  reporter        User           @relation("ReportedItems", fields: [reporter_id], references: [id])
-  assignee        User?          @relation("AssignedItems", fields: [assignee_id], references: [id])
-  project         Project        @relation(fields: [project_id], references: [id])
-  sprint          Sprint?        @relation(fields: [sprint_id], references: [id])
-  workflow_status WorkflowStatus @relation(fields: [workflow_status_id], references: [id])
-  parent          Item?          @relation("ItemToItem", fields: [parent_id], references: [id])
-  children        Item[]         @relation("ItemToItem")
-  comments        Comment[]
-  attachments     Attachment[]
+  reporter             User                @relation("ReportedItems", fields: [reporter_id], references: [id])
+  assignee             User?               @relation("AssignedItems", fields: [assignee_id], references: [id])
+  project              Project             @relation(fields: [project_id], references: [id])
+  sprint               Sprint?             @relation(fields: [sprint_id], references: [id])
+  workflow_status      WorkflowStatus      @relation(fields: [workflow_status_id], references: [id])
+  parent               Item?               @relation("ItemToItem", fields: [parent_id], references: [id])
+  children             Item[]              @relation("ItemToItem")
+  comments             Comment[]
+  attachments          Attachment[]
+  history              ItemHistory[]
+  watchers             ItemWatcher[]
+  notifications        Notification[]
+  bug_details          BugDetails?
+  bug_retests          BugRetest[]
+  custom_field_values  CustomFieldValue[]
+  sprint_scope_changes SprintScopeChange[]
+  code_links           ItemCodeLink[]
 
   @@index([workflow_status_id])
+  @@index([workflow_status_id, board_position])
+  @@index([project_id, backlog_position])
   @@index([reporter_id])
   @@index([assignee_id])
   @@index([project_id])
@@ -203,12 +474,258 @@ enum Priority {
   CRITICAL
 }
 
-model Comment {
+enum BugSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  BLOCKER
+}
+
+enum BugEnvironment {
+  DEVELOPMENT
+  TEST
+  HOMOLOGATION
+  PRODUCTION
+}
+
+enum BugOrigin {
+  DEVELOPMENT
+  TEST
+  HOMOLOGATION
+  PRODUCTION
+  CUSTOMER
+  AUDIT
+  MONITORING
+}
+
+enum BugReproducibility {
+  ALWAYS
+  INTERMITTENT
+  ONCE
+  NOT_REPRODUCED
+}
+
+model BugDetails {
+  id                 String             @id @default(uuid())
+  item_id            String             @unique
+  severity           BugSeverity        @default(MEDIUM)
+  environment        BugEnvironment     @default(TEST)
+  origin             BugOrigin          @default(DEVELOPMENT)
+  reproducibility    BugReproducibility @default(NOT_REPRODUCED)
+  reproduction_steps String?            @db.Text
+  expected_result    String?            @db.Text
+  actual_result      String?            @db.Text
+  technical_analysis String?            @db.Text
+  root_cause         String?            @db.Text
+  resolution         String?            @db.Text
+  regression         Boolean            @default(false)
+  reopened_count     Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  item Item @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@index([severity])
+  @@index([environment])
+  @@map("bug_details")
+}
+
+enum BugRetestResult {
+  APPROVED
+  FAILED
+  BLOCKED
+  NOT_TESTED
+}
+
+model BugRetest {
+  id           String          @id @default(uuid())
+  bug_id       String
+  tester_id    String
+  environment  BugEnvironment
+  result       BugRetestResult
+  observations String?         @db.Text
+  createdAt    DateTime        @default(now())
+
+  bug    Item @relation(fields: [bug_id], references: [id], onDelete: Cascade)
+  tester User @relation(fields: [tester_id], references: [id])
+
+  @@index([bug_id, createdAt])
+  @@index([tester_id])
+  @@map("bug_retests")
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTISELECT
+  USER
+  URL
+}
+
+model CustomField {
+  id             String          @id @default(uuid())
+  project_id     String
+  item_type      ItemType
+  name           String
+  field_type     CustomFieldType
+  is_required    Boolean         @default(false)
+  position       Int             @default(0)
+  is_active      Boolean         @default(true)
+  show_on_card   Boolean         @default(false)
+  use_in_filters Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  project Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  options CustomFieldOption[]
+  values  CustomFieldValue[]
+
+  @@unique([project_id, item_type, name])
+  @@index([project_id, item_type, is_active, position])
+  @@map("custom_fields")
+}
+
+model CustomFieldOption {
   id        String   @id @default(uuid())
-  text      String   @db.Text
+  field_id  String
+  label     String
+  value     String
+  position  Int      @default(0)
+  is_active Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  field CustomField @relation(fields: [field_id], references: [id], onDelete: Cascade)
+
+  @@unique([field_id, value])
+  @@index([field_id, is_active, position])
+  @@map("custom_field_options")
+}
+
+model CustomFieldValue {
+  id        String   @id @default(uuid())
+  item_id   String
+  field_id  String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item  Item        @relation(fields: [item_id], references: [id], onDelete: Cascade)
+  field CustomField @relation(fields: [field_id], references: [id], onDelete: Restrict)
+
+  @@unique([item_id, field_id])
+  @@index([field_id])
+  @@map("custom_field_values")
+}
+
+enum ItemHistoryEvent {
+  ITEM_CREATED
+  TITLE_CHANGED
+  DESCRIPTION_CHANGED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  ASSIGNEE_CHANGED
+  SPRINT_CHANGED
+  ESTIMATE_CHANGED
+  ACCEPTANCE_CRITERIA_CHANGED
+  COMMENT_CREATED
+  COMMENT_EDITED
+  COMMENT_DELETED
+  ATTACHMENT_UPLOADED
+  ATTACHMENT_DOWNLOADED
+  ATTACHMENT_DELETED
+  WATCHER_ADDED
+  WATCHER_REMOVED
+  BUG_RETEST_RECORDED
+  BUG_REOPENED
+}
+
+model ItemHistory {
+  id         String           @id @default(uuid())
+  item_id    String
+  project_id String
+  user_id    String
+  event_type ItemHistoryEvent
+  field      String?
+  old_value  Json?
+  new_value  Json?
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+
+  item          Item           @relation(fields: [item_id], references: [id])
+  project       Project        @relation(fields: [project_id], references: [id])
+  user          User           @relation(fields: [user_id], references: [id])
+  notifications Notification[]
+
+  @@index([item_id, createdAt])
+  @@index([project_id])
+  @@index([user_id])
+  @@index([event_type])
+  @@map("item_history")
+}
+
+model ItemWatcher {
+  id        String   @id @default(uuid())
+  item_id   String
+  user_id   String
+  createdAt DateTime @default(now())
+
+  item Item @relation(fields: [item_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([item_id, user_id])
+  @@index([user_id])
+  @@map("item_watchers")
+}
+
+enum NotificationType {
+  ITEM_ASSIGNED
+  COMMENT_CREATED
+  STATUS_CHANGED
+  DUE_DATE_CHANGED
+  WATCHER_ADDED
+}
+
+model Notification {
+  id         String           @id @default(uuid())
+  user_id    String
+  actor_id   String
+  project_id String
+  item_id    String
+  history_id String?
+  type       NotificationType
+  message    String
+  metadata   Json?
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  user    User         @relation("NotificationRecipient", fields: [user_id], references: [id], onDelete: Cascade)
+  actor   User         @relation("NotificationActor", fields: [actor_id], references: [id], onDelete: Cascade)
+  project Project      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  item    Item         @relation(fields: [item_id], references: [id], onDelete: Cascade)
+  history ItemHistory? @relation(fields: [history_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, readAt, createdAt])
+  @@index([project_id])
+  @@index([item_id])
+  @@index([history_id])
+  @@map("notifications")
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  text      String    @db.Text
   user_id   String
   item_id   String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  editedAt  DateTime?
+  deletedAt DateTime?
 
   user User @relation(fields: [user_id], references: [id])
   item Item @relation(fields: [item_id], references: [id])
@@ -219,14 +736,26 @@ model Comment {
 }
 
 model Attachment {
-  id        String   @id @default(uuid())
-  s3_url    String
-  fileName  String
-  item_id   String
-  createdAt DateTime @default(now())
+  id            String    @id @default(uuid())
+  s3_url        String?
+  fileName      String?
+  item_id       String
+  user_id       String?
+  bucket        String?
+  object_key    String?
+  original_name String?
+  mime_type     String?
+  size_bytes    BigInt?
+  checksum      String?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
 
-  item Item @relation(fields: [item_id], references: [id])
+  item Item  @relation(fields: [item_id], references: [id])
+  user User? @relation(fields: [user_id], references: [id])
 
   @@index([item_id])
+  @@index([user_id])
+  @@index([bucket, object_key])
+  @@index([deletedAt])
   @@map("attachments")
 }

@@ -178,3 +178,6 @@
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
+.criticalBug { border-color: rgba(239,68,68,.8); box-shadow: inset 4px 0 0 #ef4444; }
+.bugSeverity { font-size: .72rem; font-weight: 700; color: #fca5a5; background: rgba(239,68,68,.14); border-radius: 4px; padding: 3px 7px; }
+.bugMeta { display: flex; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: .76rem; }

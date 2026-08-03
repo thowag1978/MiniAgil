@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api/projects';
 import { Team, TeamInput, teamsApi } from '@/lib/api/teams';
@@ -25,18 +25,20 @@ export default function TeamsPage() {
   const usersQuery = useQuery({ queryKey: queryKeys.users, queryFn: usersApi.list });
   const projectsQuery = useQuery({ queryKey: queryKeys.projects, queryFn: projectsApi.list });
 
-  useEffect(() => {
-    if (!editingTeam) {
-      setForm(emptyForm);
-      return;
-    }
+  const handleEdit = (team: Team) => {
+    setEditingTeam(team);
     setForm({
-      name: editingTeam.name,
-      description: editingTeam.description || '',
-      user_ids: editingTeam.members.map(({ user }) => user.id),
-      project_ids: editingTeam.projects.map(({ project }) => project.id),
+      name: team.name,
+      description: team.description || '',
+      user_ids: team.members.map(({ user }) => user.id),
+      project_ids: team.projects.map(({ project }) => project.id),
     });
-  }, [editingTeam]);
+  };
+
+  const handleNew = () => {
+    setEditingTeam(null);
+    setForm(emptyForm);
+  };
 
   const saveMutation = useMutation({
     mutationFn: (input: TeamInput) => editingTeam
@@ -108,7 +110,7 @@ export default function TeamsPage() {
                 <h2>Equipes cadastradas</h2>
                 <span>{teamsQuery.data?.length || 0} equipe(s)</span>
               </div>
-              <button className="btn-primary" onClick={() => setEditingTeam(null)}>+ Nova equipe</button>
+              <button className="btn-primary" onClick={handleNew}>+ Nova equipe</button>
             </div>
 
             <div className={styles.teamList}>
@@ -123,7 +125,7 @@ export default function TeamsPage() {
                       <p>{team.description || 'Sem descrição'}</p>
                     </div>
                     <div className={styles.actions}>
-                      <button onClick={() => setEditingTeam(team)}>Editar</button>
+                      <button onClick={() => handleEdit(team)}>Editar</button>
                       <button className={styles.danger} onClick={() => handleDelete(team)}>Excluir</button>
                     </div>
                   </div>
@@ -205,7 +207,7 @@ export default function TeamsPage() {
 
             <div className={styles.formActions}>
               {editingTeam && (
-                <button type="button" className={styles.secondary} onClick={() => setEditingTeam(null)}>
+                <button type="button" className={styles.secondary} onClick={handleNew}>
                   Cancelar
                 </button>
               )}

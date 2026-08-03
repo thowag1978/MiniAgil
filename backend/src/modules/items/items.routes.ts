@@ -14,5 +14,7 @@ itemRoutes.get('/backlog-overview', itemsController.backlogOverview);
 itemRoutes.get('/hierarchical', itemsController.listHierarchical);
 itemRoutes.get('/hierarchical-tree', itemsController.listHierarchicalTree);
 itemRoutes.get('/statuses', itemsController.listStatuses);
+itemRoutes.patch('/:id/board-position', itemsController.moveOnBoard);
+itemRoutes.patch('/:id/backlog-position', itemsController.moveInBacklog);
 itemRoutes.patch('/:id', itemsController.updateField);
 itemRoutes.delete('/:id', itemsController.delete);

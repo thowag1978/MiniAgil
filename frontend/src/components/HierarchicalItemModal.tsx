@@ -28,6 +28,7 @@ interface FormData {
   parent_id: string;
   acceptance_criteria: string;
   estimate: string;
+  story_points: string;
 }
 
 export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, projectData, parentData, initialData }: HierarchicalItemModalProps) {
@@ -42,13 +43,18 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
     parent_id: initialData?.parent_id || parentData?.id || '',
     acceptance_criteria: initialData?.acceptance_criteria || '',
     estimate: initialData?.estimate ? String(initialData.estimate) : '',
+    story_points: initialData?.story_points?.toString() || '',
   });
 
   const usersQuery = useQuery({ queryKey: queryKeys.users, queryFn: () => usersApi.list() });
-  const statusesQuery = useQuery({ queryKey: queryKeys.itemStatuses, queryFn: () => itemsApi.listStatuses() });
   const projectsQuery = useQuery({ queryKey: queryKeys.projects, queryFn: () => projectsApi.list(), enabled: mode === 'CREATE' });
 
   const resolvedProjectId = formData.project_id || projectsQuery.data?.[0]?.id || '';
+  const statusesQuery = useQuery({
+    queryKey: queryKeys.itemStatuses(resolvedProjectId, type),
+    queryFn: () => itemsApi.listStatuses({ project_id: resolvedProjectId, type }),
+    enabled: Boolean(resolvedProjectId),
+  });
   const resolvedWorkflowStatusId = formData.workflow_status_id || statusesQuery.data?.find(s => s.name === 'A FAZER' || s.order === 0)?.id || statusesQuery.data?.[0]?.id || '';
 
   const mutation = useMutation({
@@ -65,7 +71,7 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
           parent_id: formData.parent_id || null,
         };
 
-        if (type === 'STORY') payload.acceptance_criteria = formData.acceptance_criteria;
+        if (type === 'STORY') { payload.acceptance_criteria = formData.acceptance_criteria; payload.story_points = formData.story_points ? Number(formData.story_points) : null; }
         if (type === 'TASK') payload.estimate = formData.estimate || null;
 
         return itemsApi.create(payload);
@@ -82,7 +88,7 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
         parent_id: formData.parent_id || null,
       };
 
-      if (type === 'STORY') payload.acceptance_criteria = formData.acceptance_criteria;
+      if (type === 'STORY') { payload.acceptance_criteria = formData.acceptance_criteria; payload.story_points = formData.story_points ? Number(formData.story_points) : null; }
       if (type === 'TASK') payload.estimate = formData.estimate || null;
 
       return itemsApi.update(initialData.id, payload);
@@ -183,7 +189,7 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
                 </div>
                 {type === 'TASK' && (
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Estimativa (Pts)</label>
+                    <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Estimativa técnica</label>
                     <input type="number" className="input-glass" value={formData.estimate} onChange={e => handleChange('estimate', e.target.value)} style={{ width: '100%' }} />
                   </div>
                 )}
@@ -196,6 +202,8 @@ export default function HierarchicalItemModal({ onClose, onSuccess, mode, type, 
 
               {type === 'STORY' && (
                 <div>
+                  <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Story points</label>
+                  <select className="input-glass" value={formData.story_points} onChange={e => handleChange('story_points', e.target.value)}><option value="">Sem pontos</option>{[1, 2, 3, 5, 8, 13, 20].map(value => <option key={value} value={value}>{value}</option>)}</select>
                   <label style={{ display: 'block', marginBottom: 5, color: 'var(--text-dim)', fontSize: '0.9rem' }}>Criterio de Aceite</label>
                   <textarea className="input-glass" placeholder="Regras para aprovacao desta historia..." rows={3} value={formData.acceptance_criteria} onChange={e => handleChange('acceptance_criteria', e.target.value)} style={{ width: '100%', padding: '10px 15px' }} />
                 </div>

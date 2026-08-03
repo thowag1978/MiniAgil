@@ -7,10 +7,16 @@ import styles from './detail.module.css';
 import { projectsApi } from '@/lib/api/projects';
 import { itemsApi } from '@/lib/api/items';
 import { queryKeys } from '@/lib/query/keys';
+import { useAuth } from '@/lib/auth/AuthContext';
+import WorkflowSettings from '@/components/WorkflowSettings';
+import CustomFieldSettings from '@/components/CustomFieldSettings';
+import WebhookSettings from '@/components/WebhookSettings';
+import RepositorySettings from '@/components/RepositorySettings';
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const projectId = params?.id;
+  const { user } = useAuth();
 
   const projectQuery = useQuery({
     queryKey: queryKeys.project(projectId || 'none'),
@@ -36,6 +42,12 @@ export default function ProjectDetailPage() {
   if (projectQuery.isLoading || epicsQuery.isLoading) return <div>Carregando visão de projeto...</div>;
   if (projectQuery.isError || epicsQuery.isError) return <div>Não foi possível carregar os dados do projeto.</div>;
   if (!projectQuery.data) return <div>Projeto não encontrado.</div>;
+
+  const membership = projectQuery.data.members?.find((member) => member.user_id === user?.id);
+  const canManageWorkflow = user?.role === 'ADMIN'
+    || projectQuery.data.owner_id === user?.id
+    || membership?.role === 'OWNER'
+    || membership?.role === 'ADMIN';
 
   return (
     <div className={`animate-fade-in ${styles.container}`}>
@@ -77,6 +89,11 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
+
+      <WorkflowSettings projectId={projectQuery.data.id} canManage={canManageWorkflow} />
+      <CustomFieldSettings projectId={projectQuery.data.id} canManage={canManageWorkflow} />
+      <WebhookSettings projectId={projectQuery.data.id} canManage={canManageWorkflow} />
+      <RepositorySettings projectId={projectQuery.data.id} canManage={canManageWorkflow} />
     </div>
   );
 }

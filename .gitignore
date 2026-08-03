@@ -3,3 +3,4 @@ dist/
 .env
 .next/
 *.log
+.codex_ssh_known_hosts

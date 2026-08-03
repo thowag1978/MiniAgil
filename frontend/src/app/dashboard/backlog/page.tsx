@@ -1,5 +1,5 @@
 ﻿'use client';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import styles from './backlog.module.css';
 import CreateItemModal from '../../../components/CreateItemModal';
@@ -8,6 +8,7 @@ import { itemsApi } from '@/lib/api/items';
 import { sprintsApi } from '@/lib/api/sprints';
 import { queryKeys } from '@/lib/query/keys';
 import type { Item } from '@/lib/types';
+import IssueModal from '@/components/IssueModal';
 
 function getPriorityLabel(priority: string) {
   if (priority === 'CRITICAL') return 'Crítica';
@@ -27,24 +28,21 @@ export default function BacklogPage() {
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectIdOverride, setSelectedProjectIdOverride] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [onlyWithoutPoints, setOnlyWithoutPoints] = useState(false);
+  const [draggedItem, setDraggedItem] = useState<Item | null>(null);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
 
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects,
     queryFn: () => projectsApi.list(),
   });
 
-  useEffect(() => {
-    const projects = projectsQuery.data || [];
-    if (projects.length === 0) {
-      setSelectedProjectId('');
-      return;
-    }
-
-    if (!selectedProjectId || !projects.some((project) => project.id === selectedProjectId)) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [projectsQuery.data, selectedProjectId]);
+  const projects = projectsQuery.data || [];
+  const selectedProjectId = projects.some((project) => project.id === selectedProjectIdOverride)
+    ? selectedProjectIdOverride
+    : projects[0]?.id || '';
 
   const backlogQuery = useQuery({
     queryKey: queryKeys.backlogOverview(selectedProjectId || 'none'),
@@ -53,11 +51,16 @@ export default function BacklogPage() {
   });
 
   const closeSprintMutation = useMutation({
-    mutationFn: (sprintId: string) => sprintsApi.updateStatus(sprintId, 'CLOSED'),
+    mutationFn: (sprintId: string) => sprintsApi.updateStatus(sprintId, 'FINISHED', { pending_destination: 'BACKLOG' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.backlogOverview(selectedProjectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.sprints(selectedProjectId) });
     },
+  });
+  const reorderMutation = useMutation({
+    mutationFn: ({ item, targetIndex }: { item: Item; targetIndex: number }) => itemsApi.moveInBacklog(item.id, { target_index: targetIndex, expected_updated_at: item.updatedAt }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.backlogOverview(selectedProjectId) }),
+    onError: (error: Error) => window.alert(error.message),
   });
 
   const selectedProject = projectsQuery.data?.find((project) => project.id === selectedProjectId);
@@ -71,17 +74,18 @@ export default function BacklogPage() {
 
   const filteredBacklogItems = useMemo(() => {
     const list = backlogQuery.data?.backlogItems || [];
-    if (!search.trim()) return list;
-    const normalized = search.toLowerCase();
-    return list.filter(item => item.title.toLowerCase().includes(normalized) || item.project_key.toLowerCase().includes(normalized));
-  }, [backlogQuery.data?.backlogItems, search]);
+    const normalized = search.toLowerCase().trim();
+    return list.filter(item => (!normalized || item.title.toLowerCase().includes(normalized) || item.project_key.toLowerCase().includes(normalized))
+      && (!typeFilter || item.type === typeFilter) && (!onlyWithoutPoints || (item.type === 'STORY' && item.story_points == null)));
+  }, [backlogQuery.data?.backlogItems, search, typeFilter, onlyWithoutPoints]);
 
-  const renderIssueCard = (item: Item) => (
-    <div key={item.id} className={styles.issueCard}>
+  const renderIssueCard = (item: Item, reorderable = false) => (
+    <div key={item.id} className={`${styles.issueCard} ${item.type === 'STORY' && item.story_points == null ? styles.withoutPoints : ''}`} draggable={reorderable} onDragStart={() => reorderable && setDraggedItem(item)} onDragEnd={() => setDraggedItem(null)} onDragOver={event => reorderable && event.preventDefault()} onDrop={event => { if (!reorderable || !draggedItem) return; event.preventDefault(); event.stopPropagation(); const targetIndex = (backlogQuery.data?.backlogItems || []).findIndex(candidate => candidate.id === item.id); reorderMutation.mutate({ item: draggedItem, targetIndex }); }} onClick={() => setSelectedItem(item)}>
       <span className={`${styles.issueType} ${typeClass(item.type)}`}>{item.type}</span>
       <span className={styles.issueKey}>{item.project_key}</span>
       <span className={styles.issueTitle}>{item.title}</span>
       <span className={styles.issuePriority}>{getPriorityLabel(item.priority)}</span>
+      {item.type === 'STORY' && <span className={styles.storyPoints}>{item.story_points == null ? 'Sem pontos' : `${item.story_points} SP`}</span>}
     </div>
   );
 
@@ -107,7 +111,7 @@ export default function BacklogPage() {
           <select
             className={`input-glass ${styles.projectSelect}`}
             value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
+            onChange={(e) => setSelectedProjectIdOverride(e.target.value)}
             aria-label="Selecionar projeto"
           >
             {(projectsQuery.data || []).map((project) => (
@@ -124,6 +128,8 @@ export default function BacklogPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <select className="input-glass" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">Todos os tipos</option><option value="STORY">Histórias</option><option value="TASK">Atividades</option><option value="BUG">Bugs</option></select>
+          <label className={styles.pointsFilter}><input type="checkbox" checked={onlyWithoutPoints} onChange={e => setOnlyWithoutPoints(e.target.checked)} /> Histórias sem pontos</label>
           <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Criar Item</button>
         </div>
       </div>
@@ -152,7 +158,7 @@ export default function BacklogPage() {
           {filteredSprintItems.length === 0 ? (
             <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhuma tarefa na sprint ativa.</div>
           ) : (
-            filteredSprintItems.map(renderIssueCard)
+            filteredSprintItems.map(item => renderIssueCard(item))
           )}
         </div>
       </div>
@@ -161,15 +167,15 @@ export default function BacklogPage() {
         <div className={styles.sprintHeader}>
           <div className={styles.sprintTitle}>
             <h3>Backlog</h3>
-            <span className={styles.sprintDates}>{filteredBacklogItems.length} tarefas pendentes</span>
+            <span className={styles.sprintDates}>{filteredBacklogItems.length} itens · {backlogQuery.data.storyPointSummary.total} pontos · {backlogQuery.data.storyPointSummary.withoutPoints} história(s) sem pontos</span>
           </div>
           <button className={`btn-primary ${styles.btnOutline}`} disabled>Criar Sprint</button>
         </div>
-        <div className={styles.issueList}>
+        <div className={styles.issueList} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedItem) reorderMutation.mutate({ item: draggedItem, targetIndex: backlogQuery.data.backlogItems.length }); }}>
           {filteredBacklogItems.length === 0 ? (
             <div style={{ padding: 16, color: 'var(--text-secondary)' }}>Nenhuma tarefa no backlog.</div>
           ) : (
-            filteredBacklogItems.map(renderIssueCard)
+            filteredBacklogItems.map(item => renderIssueCard(item, true))
           )}
         </div>
       </div>
@@ -185,6 +191,7 @@ export default function BacklogPage() {
           }}
         />
       )}
+      {selectedItem && <IssueModal issue={selectedItem} onClose={() => setSelectedItem(null)} onUpdate={() => { queryClient.invalidateQueries({ queryKey: queryKeys.backlogOverview(selectedProjectId) }); setSelectedItem(null); }} />}
     </div>
   );
 }

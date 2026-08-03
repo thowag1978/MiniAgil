@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import { WebhooksController } from './webhooks.controller';
+export const webhookRoutes = Router({ mergeParams: true });
+const controller = new WebhooksController();
+webhookRoutes.get('/', controller.list);
+webhookRoutes.post('/', controller.create);
+webhookRoutes.patch('/:webhookId', controller.update);
+webhookRoutes.post('/:webhookId/test', controller.test);
+webhookRoutes.get('/deliveries/log', controller.deliveries);
+webhookRoutes.post('/deliveries/:deliveryId/retry', controller.retry);

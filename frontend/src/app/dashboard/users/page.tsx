@@ -95,8 +95,17 @@ export default function UsersPage() {
                 </select>
               </div>
               <div className={styles.actionsCell}>
-                <button className={styles.iconBtn} title="Alterar Senha" onClick={() => handleChangePassword(user.id, user.name)}>??</button>
-                <button className={styles.iconBtn} title="Deletar Usuário" onClick={() => handleDelete(user.id, user.name)}>???</button>
+                <button type="button" className={styles.iconBtn} title="Alterar Senha" aria-label={`Alterar senha de ${user.name}`} onClick={() => handleChangePassword(user.id, user.name)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="7.5" cy="15.5" r="3.5" />
+                    <path d="m10 13 8.5-8.5M15 8l2 2M17 6l2 2" />
+                  </svg>
+                </button>
+                <button type="button" className={`${styles.iconBtn} ${styles.deleteBtn}`} title="Deletar Usuário" aria-label={`Deletar usuário ${user.name}`} onClick={() => handleDelete(user.id, user.name)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+                  </svg>
+                </button>
               </div>
             </div>
           ))

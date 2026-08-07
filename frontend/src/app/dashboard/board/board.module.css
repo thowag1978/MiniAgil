@@ -2,12 +2,15 @@
   display: flex;
   flex-direction: column;
   height: calc(100vh - 100px);
+  min-width: 0;
+  min-height: 0;
 }
 
 .boardHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   margin-bottom: 24px;
 }
 
@@ -18,7 +21,17 @@
 
 .filters {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 12px;
+}
+
+.filters select {
+  max-width: min(100%, 320px);
+}
+
+.filters button {
+  white-space: nowrap;
 }
 
 .filterChip {
@@ -41,7 +54,14 @@
   display: flex;
   gap: 20px;
   flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
   padding-bottom: 10px;
 }
 
@@ -181,3 +201,34 @@
 .criticalBug { border-color: rgba(239,68,68,.8); box-shadow: inset 4px 0 0 #ef4444; }
 .bugSeverity { font-size: .72rem; font-weight: 700; color: #fca5a5; background: rgba(239,68,68,.14); border-radius: 4px; padding: 3px 7px; }
 .bugMeta { display: flex; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: .76rem; }
+
+@media (max-width: 760px) {
+  .boardWrapper {
+    height: auto;
+    min-height: calc(100vh - 100px);
+  }
+
+  .boardHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .filters {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .filters select {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  .boardColumns {
+    flex: none;
+    min-height: 60vh;
+  }
+
+  .column {
+    flex-basis: min(82vw, 320px);
+  }
+}

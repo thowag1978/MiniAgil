@@ -70,9 +70,34 @@ export default function IssueModal({ issue, onClose, onUpdate }: IssueModalProps
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!issue) throw new Error('Issue not selected');
-      const editableBugDetails = { ...formData.bug_details };
-      delete editableBugDetails.id;
-      delete editableBugDetails.item_id;
+      const {
+        severity,
+        environment,
+        origin,
+        reproducibility,
+        reproduction_steps,
+        expected_result,
+        actual_result,
+        technical_analysis,
+        root_cause,
+        resolution,
+        regression,
+        reopened_count,
+      } = formData.bug_details;
+      const editableBugDetails = {
+        severity,
+        environment,
+        origin,
+        reproducibility,
+        reproduction_steps,
+        expected_result,
+        actual_result,
+        technical_analysis,
+        root_cause,
+        resolution,
+        regression,
+        reopened_count,
+      };
       return itemsApi.update(issue.id, {
         title: formData.title,
         description: formData.description,

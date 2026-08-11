@@ -1,7 +1,8 @@
 .boardWrapper {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 100px);
+  height: calc(100vh - 128px);
+  height: calc(100dvh - 128px);
   min-width: 0;
   min-height: 0;
 }
@@ -57,12 +58,32 @@
   width: 100%;
   min-width: 0;
   min-height: 0;
-  overflow-x: auto;
+  overflow-x: scroll;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  scrollbar-gutter: stable;
+  scrollbar-color: var(--accent-primary) var(--bg-secondary);
+  scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
+}
+
+.boardColumns::-webkit-scrollbar {
+  height: 12px;
+}
+
+.boardColumns::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 999px;
+}
+
+.boardColumns::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border: 3px solid var(--bg-secondary);
+  border-radius: 999px;
+}
+
+.boardColumns::-webkit-scrollbar-thumb:hover {
+  background: #7c8aff;
 }
 
 .column {
@@ -205,7 +226,8 @@
 @media (max-width: 760px) {
   .boardWrapper {
     height: auto;
-    min-height: calc(100vh - 100px);
+    min-height: calc(100vh - 128px);
+    min-height: calc(100dvh - 128px);
   }
 
   .boardHeader {

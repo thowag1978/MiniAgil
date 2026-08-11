@@ -1,8 +1,12 @@
-.wrapper { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); }
+.wrapper { display: flex; flex-direction: column; width: 100%; min-width: 0; box-sizing: border-box; gap: 10px; margin-bottom: 16px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); }
 .filters, .savedViews { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.filters input, .filters select, .savedViews input, .savedViews select { min-width: 145px; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: rgba(0,0,0,.2); color: var(--text-primary); }
+.filters input:not([type="checkbox"]), .filters select, .savedViews input:not([type="checkbox"]), .savedViews select { flex: 1 1 145px; min-width: 0; max-width: 240px; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: rgba(0,0,0,.2); color: var(--text-primary); }
 .filters label { display: flex; align-items: center; gap: 5px; font-size: .82rem; color: var(--text-secondary); }
 .filters button, .savedViews button { border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; background: rgba(255,255,255,.04); color: var(--text-primary); cursor: pointer; }
 .savedViews { padding-top: 10px; border-top: 1px solid var(--border-color); }
 .savedViews span { font-size: .82rem; color: var(--text-secondary); }
 .savedViews .danger { color: #fca5a5; border-color: rgba(239,68,68,.4); }
+
+@media (max-width: 760px) {
+  .filters input:not([type="checkbox"]), .filters select, .savedViews input:not([type="checkbox"]), .savedViews select { max-width: none; }
+}

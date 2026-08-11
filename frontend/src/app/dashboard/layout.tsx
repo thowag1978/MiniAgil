@@ -33,16 +33,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const currentPage = pageTitles.find((page) => pathname === page.href || pathname.startsWith(`${page.href}/`))?.label || 'Visão Geral';
+  const isKanbanPage = pathname === '/dashboard/board' || pathname.startsWith('/dashboard/board/');
 
   return (
     <div className={styles.layout}>
       <Sidebar />
-      <div className={styles.mainContent}>
+      <div className={`${styles.mainContent} ${isKanbanPage ? styles.kanbanMainContent : ''}`}>
         <header className={styles.topbar}>
           <div className={styles.breadcrumb}>Dashboard &gt; {currentPage}</div>
           <UserNavProfile />
         </header>
-        <main className={styles.pageContent}>
+        <main className={`${styles.pageContent} ${isKanbanPage ? styles.kanbanPageContent : ''}`}>
           {children}
         </main>
       </div>

@@ -9,6 +9,12 @@
   flex-direction: column;
 }
 
+.kanbanMainContent {
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
 .topbar {
   height: 64px;
   border-bottom: 1px solid var(--border-color);
@@ -70,6 +76,10 @@
   flex: 1;
   padding: 32px;
   overflow-y: auto;
+}
+
+.kanbanPageContent {
+  min-width: 0;
 }
 
 .dashHeader {
